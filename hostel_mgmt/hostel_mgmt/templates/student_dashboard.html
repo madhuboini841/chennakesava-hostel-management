@@ -1,0 +1,570 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Student Dashboard — CBH</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+  <!-- Flash Messages -->
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+      <div class="flash-messages" id="flashMessages">
+        {% for category, message in messages %}
+          <div class="flash {{ category }}">
+            {% if category == 'success' %}✅{% elif category == 'error' %}❌{% else %}ℹ️{% endif %}
+            {{ message }}
+          </div>
+        {% endfor %}
+      </div>
+    {% endif %}
+  {% endwith %}
+
+  <div class="sidebar-overlay" onclick="closeSidebar()"></div>
+  <div class="dashboard-layout">
+    <!-- ====== SIDEBAR ====== -->
+    <aside class="sidebar">
+      <div class="sidebar-header">
+        <div class="brand">🏠 CBH</div>
+        <div class="tagline">Student Portal</div>
+      </div>
+
+      <div class="sidebar-user">
+        <div class="user-avatar">
+          {{ session['user_name'][0]|upper }}
+        </div>
+        <div class="user-info">
+          <div class="name">{{ session['user_name'] }}</div>
+          <div class="role">Student</div>
+        </div>
+      </div>
+
+      <nav class="sidebar-nav">
+        <div class="nav-section-title">Menu</div>
+        <ul>
+          <li class="nav-item"><a href="#profile" class="active nav-link" onclick="showTab('profile')"><span class="nav-icon">👤</span> My Profile</a></li>
+          <li class="nav-item"><a href="#fees" class="nav-link" onclick="showTab('fees')"><span class="nav-icon">💰</span> Fee Status</a></li>
+          <li class="nav-item"><a href="#receipts" class="nav-link" onclick="showTab('receipts')"><span class="nav-icon">🧾</span> My Receipts</a></li>
+          <li class="nav-item"><a href="#complaints" class="nav-link" onclick="showTab('complaints')"><span class="nav-icon">📝</span> Complaints</a></li>
+          <li class="nav-item"><a href="#notices" class="nav-link" onclick="showTab('notices')"><span class="nav-icon">📢</span> Notices</a></li>
+          <li class="nav-item"><a href="#food" class="nav-link" onclick="showTab('food')"><span class="nav-icon">🍽️</span> Food & Meals</a></li>
+        </ul>
+      </nav>
+
+      <div class="sidebar-footer">
+        <a href="{{ url_for('change_password') }}">🔐 Change Password</a>
+        <a href="/logout">🚪 Logout</a>
+      </div>
+    </aside>
+
+    <!-- ====== MAIN CONTENT ====== -->
+    <div class="main-content">
+      <div class="top-header">
+        <button class="hamburger-btn" onclick="toggleSidebar()">☰</button>
+        <div class="page-title" id="currentPageTitle">My Profile</div>
+        <div class="header-full-name" style="font-weight: 700; color: var(--primary); display: flex; align-items: center; justify-content: center; flex: 1;">Chennakesava Boys Hostel</div>
+        <div class="header-actions">
+          <span style="font-size:12px; color:#999;">
+            {% set today = namespace() %}
+            Welcome back!
+          </span>
+        </div>
+      </div>
+
+      <div class="page-body">
+        <!-- ===== TAB: PROFILE ===== -->
+        <div id="tab-profile" class="tab-section">
+          
+        <!-- Welcome Banner -->
+        <div class="welcome-banner">
+          <div>
+            <h2>Hello, {{ student.name }}! 👋</h2>
+            <p>
+              {% if student.room_number %}
+                Room {{ student.room_number }} | {{ student.course or 'N/A' }} Year {{ student.year_of_study or '' }}
+              {% else %}
+                No room assigned yet. Contact admin.
+              {% endif %}
+            </p>
+          </div>
+          <div class="date">
+            🏫 {{ student.roll_number or 'N/A' }}
+          </div>
+        </div>
+
+        <div class="two-col">
+            <!-- Personal Info Card -->
+            <div class="card">
+              <div class="card-header">
+                <div class="card-title">👤 Personal Information</div>
+              </div>
+              <div class="card-body">
+                <div class="info-grid">
+                  <div class="info-item">
+                    <div class="info-label">Full Name</div>
+                    <div class="info-value">{{ student.name }}</div>
+                  </div>
+                  <div class="info-item">
+                    <div class="info-label">Email</div>
+                    <div class="info-value" style="font-size:13px">{{ student.email }}</div>
+                  </div>
+                  <div class="info-item">
+                    <div class="info-label">Mobile Number</div>
+                    <div class="info-value">{{ student.mobile_number or '—' }}</div>
+                  </div>
+                  <div class="info-item">
+                    <div class="info-label">Roll Number</div>
+                    <div class="info-value">{{ student.roll_number or '—' }}</div>
+                  </div>
+                  <div class="info-item">
+                    <div class="info-label">Course</div>
+                    <div class="info-value">{{ student.course or '—' }}</div>
+                  </div>
+                  <div class="info-item">
+                    <div class="info-label">Year of Study</div>
+                    <div class="info-value">Year {{ student.year_of_study or '—' }}</div>
+                  </div>
+                  <div class="info-item">
+                    <div class="info-label">College/University</div>
+                    <div class="info-value">{{ student.college_name or '—' }}</div>
+                  </div>
+                  <div class="info-item">
+                    <div class="info-label">Branch/Department</div>
+                    <div class="info-value">{{ student.branch or '—' }}</div>
+                  </div>
+                  <div class="info-item">
+                    <div class="info-label">Date of Birth</div>
+                    <div class="info-value">{{ student.dob or '—' }}</div>
+                  </div>
+                  <div class="info-item">
+                    <div class="info-label">Gender</div>
+                    <div class="info-value">{{ student.gender or '—' }}</div>
+                  </div>
+                  <div class="info-item">
+                    <div class="info-label">Blood Group</div>
+                    <div class="info-value">{{ student.blood_group or '—' }}</div>
+                  </div>
+                  <div class="info-item">
+                    <div class="info-label">Aadhaar Number</div>
+                    <div class="info-value">{{ student.aadhaar_number or '—' }}</div>
+                  </div>
+                  <div class="info-item">
+                    <div class="info-label">Parent/Guardian Name</div>
+                    <div class="info-value">{{ student.parent_name or '—' }}</div>
+                  </div>
+                  <div class="info-item">
+                    <div class="info-label">Relationship</div>
+                    <div class="info-value">{{ student.parent_relation or '—' }}</div>
+                  </div>
+                  <div class="info-item">
+                    <div class="info-label">Parent Mobile Number</div>
+                    <div class="info-value">{{ student.parent_number or '—' }}</div>
+                  </div>
+                  <div class="info-item" style="grid-column: 1 / -1;">
+                    <div class="info-label">Permanent Address</div>
+                    <div class="info-value" style="font-size:13px; line-height:1.4; padding-top:4px;">
+                      {% if student.permanent_address %}
+                        {{ student.permanent_address }}<br>
+                        {% if student.city or student.state or student.pincode %}
+                          {{ student.city or '' }} {{ student.state or '' }} - {{ student.pincode or '' }}
+                        {% endif %}
+                      {% else %}
+                        —
+                      {% endif %}
+                    </div>
+                  </div>
+                  <div class="info-item">
+                    <div class="info-label">Join Date</div>
+                    <div class="info-value">{{ student.join_date }}</div>
+                  </div>
+                  <div class="info-item">
+                    <div class="info-label">Status</div>
+                    <div class="info-value">
+                      <span class="badge badge-success">{{ student.status|title }}</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Room Info Card -->
+            <div class="card">
+              <div class="card-header">
+                <div class="card-title">🛏️ Room Details</div>
+              </div>
+              <div class="card-body">
+                {% if student.room_number %}
+                <div class="info-grid">
+                  <div class="info-item">
+                    <div class="info-label">Room Number</div>
+                    <div class="info-value" style="font-size:24px; font-weight:800; color:var(--primary)">
+                      {{ student.room_number }}
+                    </div>
+                  </div>
+                  <div class="info-item">
+                    <div class="info-label">Floor</div>
+                    <div class="info-value">Floor {{ student.floor }}</div>
+                  </div>
+                  <div class="info-item">
+                    <div class="info-label">Room Type</div>
+                    <div class="info-value">{{ student.room_type|title }}</div>
+                  </div>
+                  <div class="info-item">
+                    <div class="info-label">Monthly Fee</div>
+                    <div class="info-value" style="color:var(--accent); font-weight:800">
+                      ₹{{ "%.0f"|format(student.monthly_fee) }}
+                    </div>
+                  </div>
+                </div>
+                {% else %}
+                <div class="empty-state">
+                  <div class="icon">🚪</div>
+                  <p>No room assigned yet.<br>Please contact the admin.</p>
+                </div>
+                {% endif %}
+              </div>
+            </div>
+          </div>
+        </div>
+        <!-- ===== TAB: FEES ===== -->
+        <div id="tab-fees" class="tab-section" style="display:none">
+          <div class="card">
+            <div class="card-header">
+              <div class="card-title">💰 Fee Payment Status</div>
+            </div>
+            <div class="card-body">
+              {% if fees %}
+              <div class="table-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Month</th>
+                      <th>Amount</th>
+                      <th>Due Date</th>
+                      <th>Status</th>
+                      <th>Paid On</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {% for fee in fees %}
+                    <tr>
+                      <td><strong>{{ fee.month }}</strong></td>
+                      <td>₹{{ "%.0f"|format(fee.amount) }}</td>
+                      <td>{{ fee.due_date }}</td>
+                      <td>
+                        {% if fee.status == 'paid' %}
+                          <span class="badge badge-success">✅ Paid</span>
+                        {% elif fee.status == 'overdue' %}
+                          <span class="badge badge-danger">⚠️ Overdue</span>
+                        {% else %}
+                          <span class="badge badge-warning">⏳ Pending</span>
+                        {% endif %}
+                      </td>
+                      <td>{{ fee.payment_date or '—' }}</td>
+                    </tr>
+                    {% endfor %}
+                  </tbody>
+                </table>
+              </div>
+              {% else %}
+              <div class="empty-state">
+                <div class="icon">💳</div>
+                <p>No fee records found.</p>
+              </div>
+              {% endif %}
+            </div>
+          </div>
+        </div>
+
+        <!-- ===== TAB: RECEIPTS ===== -->
+        <div id="tab-receipts" class="tab-section" style="display:none">
+          <div class="card">
+            <div class="card-header">
+              <div class="card-title">🧾 My Fee Receipts</div>
+            </div>
+            <div class="card-body">
+              {% if receipts %}
+              <div class="table-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Receipt No</th>
+                      <th>Date</th>
+                      <th>Amount</th>
+                      <th>Payment Type</th>
+                      <th>Payment Mode</th>
+                      <th>Period</th>
+                      <th style="text-align:center;">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {% for r in receipts %}
+                    <tr>
+                      <td><strong>{{ r.receipt_number }}</strong></td>
+                      <td>{{ r.created_at.strftime('%Y-%m-%d %H:%M:%S') if r.created_at else '' }}</td>
+                      <td style="color:var(--accent); font-weight:bold;">₹{{ "%.2f"|format(r.amount) }}</td>
+                      <td>{{ r.payment_type }}</td>
+                      <td>{{ r.payment_mode }}</td>
+                      <td>{{ r.period }}</td>
+                      <td style="text-align:center;">
+                        <a href="/api/receipts/download/{{ r.id }}" target="_blank" class="btn btn-sm" style="background:var(--primary); color:white; padding:4px 8px; border-radius:4px; text-decoration:none; font-size:12px;">📥 Download PDF</a>
+                      </td>
+                    </tr>
+                    {% endfor %}
+                  </tbody>
+                </table>
+              </div>
+              {% else %}
+              <div class="empty-state">
+                <div class="icon">🧾</div>
+                <p>No fee receipts found.</p>
+              </div>
+              {% endif %}
+            </div>
+          </div>
+        </div>
+
+        <!-- ===== TAB: COMPLAINTS ===== -->
+        <div id="tab-complaints" class="tab-section" style="display:none">
+          <div class="two-col">
+            <!-- Submit new complaint -->
+            <div class="card">
+              <div class="card-header">
+                <div class="card-title">➕ Submit a Complaint</div>
+              </div>
+              <div class="card-body">
+                <form method="POST" action="/complaints/submit">
+                  <div class="form-group">
+                    <label>Category</label>
+                    <select name="category">
+                      <option value="maintenance">🔧 Maintenance</option>
+                      <option value="food">🍽️ Food</option>
+                      <option value="security">🔒 Security</option>
+                      <option value="cleanliness">🧹 Cleanliness</option>
+                      <option value="other">📌 Other</option>
+                    </select>
+                  </div>
+                  <div class="form-group">
+                    <label>Title</label>
+                    <input type="text" name="title" placeholder="Brief title of your issue" required>
+                  </div>
+                  <div class="form-group">
+                    <label>Description</label>
+                    <textarea name="description" placeholder="Describe your complaint in detail..." required rows="4"></textarea>
+                  </div>
+                  <button type="submit" class="btn btn-primary">
+                    📤 Submit Complaint
+                  </button>
+                </form>
+              </div>
+            </div>
+
+            <!-- My complaints list -->
+            <div class="card">
+              <div class="card-header">
+                <div class="card-title">📋 My Complaints</div>
+              </div>
+              <div class="card-body" style="padding:0">
+                {% if complaints %}
+                <div style="max-height:420px; overflow-y:auto;">
+                  {% for c in complaints %}
+                  <div style="padding:14px 16px; border-bottom:1px solid var(--border);">
+                    <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:6px;">
+                      <strong style="font-size:14px;">{{ c.title }}</strong>
+                      {% if c.status == 'open' %}
+                        <span class="badge badge-open">Open</span>
+                      {% elif c.status == 'in_progress' %}
+                        <span class="badge badge-progress">In Progress</span>
+                      {% else %}
+                        <span class="badge badge-resolved">Resolved</span>
+                      {% endif %}
+                    </div>
+                    <div style="font-size:12px; color:var(--text-light); margin-bottom:6px;">
+                      {{ c.category|title }} · {{ c.submitted_at.strftime('%d %b %Y') if c.submitted_at else '' }}
+                    </div>
+                    <div style="font-size:13px; color:#555;">{{ c.description }}</div>
+                    {% if c.admin_response %}
+                    <div style="margin-top:8px; padding:8px; background:#f0f9f0; border-left:3px solid var(--success); font-size:12px; border-radius:4px;">
+                      <strong>Admin Response:</strong> {{ c.admin_response }}
+                    </div>
+                    {% endif %}
+                  </div>
+                  {% endfor %}
+                </div>
+                {% else %}
+                <div class="empty-state">
+                  <div class="icon">📭</div>
+                  <p>No complaints submitted yet.</p>
+                </div>
+                {% endif %}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ===== TAB: NOTICES ===== -->
+        <div id="tab-notices" class="tab-section" style="display:none">
+          <div class="card">
+            <div class="card-header">
+              <div class="card-title">📢 Notice Board</div>
+            </div>
+            <div class="card-body">
+              {% if notices %}
+                {% for notice in notices %}
+                <div class="notice-item {{ notice.priority }}">
+                  <div style="display:flex; justify-content:space-between; align-items:center;">
+                    <div class="notice-title">{{ notice.title }}</div>
+                    <span class="badge badge-{{ notice.priority }}">{{ notice.priority|title }}</span>
+                  </div>
+                  <div class="notice-content">{{ notice.content }}</div>
+                  <div class="notice-meta">
+                    <span>👤 {{ notice.admin_name }}</span>
+                    <span>📅 {{ notice.created_at.strftime('%d %b %Y, %I:%M %p') if notice.created_at else '' }}</span>
+                  </div>
+                </div>
+                {% endfor %}
+              {% else %}
+              <div class="empty-state">
+                <div class="icon">📋</div>
+                <p>No notices posted yet.</p>
+              </div>
+              {% endif %}
+            </div>
+          </div>
+        </div>
+
+        <!-- ===== TAB: FOOD & MEALS ===== -->
+        <div id="tab-food" class="tab-section" style="display:none">
+          <div class="two-col">
+            <!-- Today's Menu -->
+            <div class="card">
+              <div class="card-header">
+                <div class="card-title">🍽️ Today's Menu ({{ today_str }})</div>
+              </div>
+              <div class="card-body">
+                {% if todays_menu %}
+                  <div style="display: flex; flex-direction: column; gap: 10px;">
+                  {% for m in todays_menu %}
+                    {% if m['meal_type'] == student['meal_preference'] or not student['meal_preference'] %}
+                    <div style="padding: 12px; border-left: 4px solid var(--primary); background: #f9f9ff; border-radius: 4px;">
+                      <div style="font-weight: 800; font-size: 14px; text-transform: uppercase; margin-bottom: 4px;">{{ m['meal_slot'] }}</div>
+                      <div style="font-size: 13px; color: #555;">{{ m['items'] }}</div>
+                    </div>
+                    {% endif %}
+                  {% endfor %}
+                  </div>
+                {% else %}
+                  <div class="empty-state">
+                    <div class="icon">🍳</div>
+                    <p>Menu hasn't been posted for today yet.</p>
+                  </div>
+                {% endif %}
+              </div>
+            </div>
+
+            <!-- Opt-out Form -->
+            <div class="card">
+              <div class="card-header">
+                <div class="card-title">🚫 Daily Meal Opt-Out</div>
+              </div>
+              <div class="card-body">
+                <div style="background:var(--warning-light); color:var(--warning-dark); padding:10px; border-radius:4px; font-size:12px; margin-bottom:16px;">
+                  <strong>Deadline Rules:</strong> You can only opt-out of Breakfast before <strong>7 AM</strong>, and Lunch/Dinner before <strong>10 AM</strong>.
+                </div>
+                
+                <form method="POST" action="/student/food/optout">
+                  <input type="hidden" name="date" value="{{ today_str }}">
+                  
+                  <div style="margin-bottom: 16px;">
+                    <label style="display:flex; align-items:center; gap:8px; margin-bottom:10px; font-weight:600; font-size:14px; cursor:pointer;">
+                      <input type="checkbox" name="skip_breakfast" value="1" {% if optout.breakfast %}checked{% endif %}>
+                      Skip Breakfast
+                    </label>
+                    <label style="display:flex; align-items:center; gap:8px; margin-bottom:10px; font-weight:600; font-size:14px; cursor:pointer;">
+                      <input type="checkbox" name="skip_lunch" value="1" {% if optout.lunch %}checked{% endif %}>
+                      Skip Lunch
+                    </label>
+                    <label style="display:flex; align-items:center; gap:8px; margin-bottom:10px; font-weight:600; font-size:14px; cursor:pointer;">
+                      <input type="checkbox" name="skip_dinner" value="1" {% if optout.dinner %}checked{% endif %}>
+                      Skip Dinner
+                    </label>
+                  </div>
+                  
+                  <div class="form-group">
+                    <label>Reason (Optional)</label>
+                    <input type="text" name="reason" value="{{ optout.reason }}" placeholder="Going home, outside, fasting, etc.">
+                  </div>
+                  
+                  <button type="submit" class="btn btn-primary" style="width:100%">
+                    💾 Save Opt-Out Preferences
+                  </button>
+                </form>
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </div><!-- /page-body -->
+    </div><!-- /main-content -->
+  </div><!-- /dashboard-layout -->
+
+  <script>
+    const tabTitles = {
+      'profile': 'My Profile',
+      'fees': 'Fee Status',
+      'receipts': 'My Receipts',
+      'complaints': 'Complaints',
+      'notices': 'Notice Board',
+      'food': 'Food & Meals'
+    };
+
+    function toggleSidebar() {
+      document.querySelector('.sidebar').classList.toggle('open');
+      const overlay = document.querySelector('.sidebar-overlay');
+      if (overlay) overlay.classList.toggle('open');
+    }
+    
+    function closeSidebar() {
+      const sidebar = document.querySelector('.sidebar');
+      const overlay = document.querySelector('.sidebar-overlay');
+      if (sidebar) sidebar.classList.remove('open');
+      if (overlay) overlay.classList.remove('open');
+    }
+
+    function showTab(name) {
+      // Hide all tab sections
+      document.querySelectorAll('.tab-section').forEach(t => t.style.display = 'none');
+      // Show selected
+      const target = document.getElementById('tab-' + name);
+      if (target) target.style.display = 'block';
+      // Update nav active state
+      document.querySelectorAll('.nav-link').forEach(l => {
+          l.classList.remove('active');
+          if (l.getAttribute('href') === '#' + name) {
+              l.classList.add('active');
+          }
+      });
+      // Update page title
+      const tabTitles = {
+        'profile': 'My Profile',
+        'fees': 'Fee Status',
+        'receipts': 'My Receipts',
+        'complaints': 'Complaints',
+        'notices': 'Notices',
+        'food': 'Food & Meals'
+      };
+      const titleEl = document.getElementById('currentPageTitle');
+      if (titleEl) titleEl.textContent = tabTitles[name] || name;
+      
+      closeSidebar();
+    }
+
+    // Auto-hide flash messages
+    setTimeout(() => {
+      const f = document.getElementById('flashMessages');
+      if (f) { f.style.opacity = '0'; f.style.transition = 'opacity 0.5s'; setTimeout(() => f.remove(), 500); }
+    }, 4000);
+  </script>
+</body>
+</html>

@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Login — Chennakesava Boys Hostel</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+  <!-- Flash Messages -->
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+      <div class="flash-messages" id="flashMessages">
+        {% for category, message in messages %}
+          <div class="flash {{ category }}">
+            {% if category == 'success' %}✅{% elif category == 'error' %}❌{% else %}ℹ️{% endif %}
+            {{ message }}
+          </div>
+        {% endfor %}
+      </div>
+    {% endif %}
+  {% endwith %}
+
+  <div class="login-page">
+    <div class="login-box">
+      <!-- Logo -->
+      <div class="login-logo">
+        <div class="icon">🏠</div>
+        <h1>Chennakesava Boys Hostel</h1>
+        <p>Hostel Management System</p>
+      </div>
+
+      <!-- Role Selector Tabs -->
+      <div class="role-tabs">
+        <div class="role-tab active" id="tab-student" onclick="selectRole('student')">👨‍🎓 Student</div>
+        <div class="role-tab" id="tab-admin" onclick="selectRole('admin')">🔑 Admin</div>
+      </div>
+
+      <!-- Login Form -->
+      <form method="POST" action="/login">
+        <!-- Hidden role field, changed by JS -->
+        <input type="hidden" name="role" id="roleInput" value="student">
+
+        <div class="form-group">
+          <label for="email">Email Address</label>
+          <input type="email" id="email" name="email" placeholder="Enter your email" required autofocus>
+        </div>
+
+        <div class="form-group">
+          <label for="password">Password</label>
+          <input type="password" id="password" name="password" placeholder="Enter your password" required>
+        </div>
+
+        <button type="submit" class="btn btn-primary btn-full">
+          Sign In
+        </button>
+
+        <div style="text-align:center; margin-top: 15px;">
+          <a href="{{ url_for('forgot_password') }}" style="color: #4a90e2; text-decoration: none; font-size: 14px;">Forgot Password?</a>
+        </div>
+      </form>
+
+    </div>
+  </div>
+
+  <script>
+    // Switch between student/admin role tabs
+    function selectRole(role) {
+      document.getElementById('roleInput').value = role;
+      document.getElementById('tab-student').classList.toggle('active', role === 'student');
+      document.getElementById('tab-admin').classList.toggle('active', role === 'admin');
+    }
+
+    // Auto-hide flash messages after 4 seconds
+    setTimeout(() => {
+      const f = document.getElementById('flashMessages');
+      if (f) f.style.opacity = '0', f.style.transition = 'opacity 0.5s', setTimeout(() => f.remove(), 500);
+    }, 4000);
+  </script>
+</body>
+</html>
