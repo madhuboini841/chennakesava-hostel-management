@@ -7,7 +7,8 @@
     "node": "20.x"
   },
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "render-build": "npm install && npm install --build-from-source=sqlite3"
   },
   "keywords": [],
   "author": "",
