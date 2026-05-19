@@ -246,10 +246,10 @@ def create_default_admin():
     if not cursor.fetchone():
         hashed = bcrypt.hashpw("admin123".encode(), bcrypt.gensalt()).decode()
         cursor.execute(
-            "INSERT INTO admins (name, email, password_hash) VALUES (%s, %s, %s)",
-            ("Admin", "admin@hostel.com", hashed)
+            "INSERT INTO admins (name, email, password_hash) VALUES (%s, %s, %s) ON CONFLICT (email) DO NOTHING",
+            ("Admin", "admin@cbh.com", hashed)
         )
-        print("[INFO] Default admin created: admin@hostel.com / admin123")
+        print("[INFO] Default admin created: admin@cbh.com / admin123")
     cursor.close()
     conn.close()
 

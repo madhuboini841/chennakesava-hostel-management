@@ -1,5 +1,6 @@
 import psycopg2
 import os
+import bcrypt
 
 def init_db():
     try:
@@ -34,8 +35,17 @@ def init_db():
             statement = statement.strip()
             if statement:
                 cursor.execute(statement)
+                
+        # Insert default admin user requested by user
+        cursor.execute("SELECT id FROM admins WHERE email = 'admin@cbh.com'")
+        if not cursor.fetchone():
+            hashed = bcrypt.hashpw("admin123".encode(), bcrypt.gensalt()).decode()
+            cursor.execute(
+                "INSERT INTO admins (name, email, password_hash) VALUES (%s, %s, %s) ON CONFLICT (email) DO NOTHING",
+                ("Admin", "admin@cbh.com", hashed)
+            )
 
-        print("Database initialized successfully.")
+        print("Database initialized successfully with default admin.")
         
     except Exception as e:
         print(f"Error: {e}")
