@@ -1,6 +1,6 @@
 # ============================================================
 # app.py - Hostel Management System Backend
-# Flask + MySQL + bcrypt
+# Flask + PostgreSQL + bcrypt
 # ============================================================
 
 from flask import Flask, render_template, request, redirect, url_for, session, jsonify, flash, send_file
@@ -173,24 +173,34 @@ def send_food_reminder():
 
 def auto_backup_db():
     print("[SCHEDULER] Running daily automated database backup...")
+    
+    # If on Render, skip manual backup as Render provides managed backups
+    if os.getenv('RENDER'):
+        print("[SCHEDULER] Running on Render. Skipping manual backup (Render has automated backups).")
+        return
+        
     backup_dir = os.path.join(os.path.dirname(__file__), 'backups')
     os.makedirs(backup_dir, exist_ok=True)
     
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     backup_file = os.path.join(backup_dir, f"hostel_db_backup_{timestamp}.sql")
     
-    db_user = os.getenv('DB_USER', 'root')
-    db_name = os.getenv('DB_NAME', 'hostel_db')
+    db_host = os.getenv('DB_HOST', 'localhost')
+    db_user = os.getenv('DB_USER', 'postgres')
+    db_name = os.getenv('DB_NAME', 'postgres')
+    db_port = os.getenv('DB_PORT', '5432')
     
     try:
-        # Note: Using absolute path for mysqldump to be safe in XAMPP
-        mysqldump_path = r"C:\xampp\mysql\bin\mysqldump.exe"
-        if not os.path.exists(mysqldump_path):
-            mysqldump_path = "mysqldump" # Fallback to system path
+        # Use pg_dump for PostgreSQL
+        env = os.environ.copy()
+        if os.getenv('DB_PASSWORD'):
+            env['PGPASSWORD'] = os.getenv('DB_PASSWORD')
             
-        with open(backup_file, 'w') as f:
-            subprocess.run([mysqldump_path, '-u', db_user, db_name], stdout=f, check=True)
+        subprocess.run(['pg_dump', '-h', db_host, '-p', db_port, '-U', db_user, '-f', backup_file, db_name], 
+                       env=env, check=True, stderr=subprocess.PIPE)
         print(f"[BACKUP] Successfully created backup at {backup_file}")
+    except FileNotFoundError:
+        print("[BACKUP ERROR] 'pg_dump' utility not found. Please install PostgreSQL client tools.")
     except Exception as e:
         print(f"[BACKUP ERROR] Failed to create backup: {e}")
 
@@ -205,7 +215,7 @@ scheduler.start()
 
 # ============================================================
 # DATABASE CONFIGURATION
-# Update these values to match your MySQL setup
+# Update these values to match your PostgreSQL setup
 # ============================================================
 DB_CONFIG = {
     'host': os.getenv('DB_HOST', 'localhost'),
@@ -223,7 +233,7 @@ if DB_CONFIG['host'] != 'localhost':
 # DATABASE HELPER: Get a fresh connection
 # ============================================================
 def get_db():
-    """Returns a MySQL connection. Call this in each route."""
+    """Returns a PostgreSQL connection. Call this in each route."""
     try:
         conn = psycopg2.connect(**DB_CONFIG)
         conn.autocommit = True
