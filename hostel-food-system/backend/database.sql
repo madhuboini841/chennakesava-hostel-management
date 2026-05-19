@@ -28,6 +28,9 @@ CREATE TABLE IF NOT EXISTS admins (
     name VARCHAR(100) NOT NULL,
     email VARCHAR(100) NOT NULL UNIQUE,
     password_hash VARCHAR(255) NOT NULL,
+    reset_token VARCHAR(255) DEFAULT NULL,
+    reset_token_expiry TIMESTAMP DEFAULT NULL,
+    must_change_password BOOLEAN DEFAULT FALSE,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -62,6 +65,9 @@ CREATE TABLE IF NOT EXISTS students (
     city VARCHAR(100),
     state VARCHAR(100),
     pincode VARCHAR(20),
+    reset_token VARCHAR(255) DEFAULT NULL,
+    reset_token_expiry TIMESTAMP DEFAULT NULL,
+    must_change_password BOOLEAN DEFAULT FALSE,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (room_id) REFERENCES rooms(id) ON DELETE SET NULL
 );
@@ -255,3 +261,12 @@ CREATE TABLE IF NOT EXISTS food_optouts (
     FOREIGN KEY(student_id) REFERENCES students(id) ON DELETE CASCADE,
     UNIQUE (student_id, date)
 );
+
+
+-- Update schema for existing databases
+ALTER TABLE admins ADD COLUMN IF NOT EXISTS reset_token VARCHAR(255);
+ALTER TABLE admins ADD COLUMN IF NOT EXISTS reset_token_expiry TIMESTAMP;
+ALTER TABLE admins ADD COLUMN IF NOT EXISTS must_change_password BOOLEAN DEFAULT FALSE;
+ALTER TABLE students ADD COLUMN IF NOT EXISTS reset_token VARCHAR(255);
+ALTER TABLE students ADD COLUMN IF NOT EXISTS reset_token_expiry TIMESTAMP;
+ALTER TABLE students ADD COLUMN IF NOT EXISTS must_change_password BOOLEAN DEFAULT FALSE;
