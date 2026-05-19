@@ -292,7 +292,8 @@ def send_auth_email(to_email, subject, body_html):
     msg.attach(MIMEText(body_html, 'html'))
 
     try:
-        server = smtplib.SMTP(smtp_server, smtp_port)
+        # Set a strict 5-second timeout to prevent 502 Bad Gateway errors on Render
+        server = smtplib.SMTP(smtp_server, smtp_port, timeout=5)
         server.set_debuglevel(1) # Enable debug output for the terminal logs
         server.starttls()
         server.login(smtp_user, smtp_pass)
@@ -302,6 +303,9 @@ def send_auth_email(to_email, subject, body_html):
     except smtplib.SMTPAuthenticationError as e:
         print(f"\n[SMTP AUTH ERROR] Failed to login to {smtp_server}:{smtp_port} with {smtp_user}.")
         print(f"Details: {e.smtp_code} - {e.smtp_error.decode('utf-8') if isinstance(e.smtp_error, bytes) else e.smtp_error}\n")
+        return False
+    except TimeoutError:
+        print(f"\n[SMTP TIMEOUT] Connection to {smtp_server} timed out after 5 seconds.\n")
         return False
     except Exception as e:
         print(f"\n[SMTP GENERAL ERROR] {e}\n")
