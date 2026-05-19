@@ -6,7 +6,9 @@ const port = process.env.PORT || 10000;
 const host = '0.0.0.0';
 
 // Spawn gunicorn to serve the Flask app
-const pythonProcess = spawn('python3', ['-m', 'gunicorn', 'app:app', '--bind', `${host}:${port}`]);
+const pythonProcess = spawn('python3', ['-m', 'gunicorn', 'app:app', '--bind', `${host}:${port}`], {
+    env: { ...process.env, PYTHONPATH: './pypackages' }
+});
 
 pythonProcess.stdout.on('data', (data) => {
     process.stdout.write(`Python: ${data}`);
