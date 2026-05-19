@@ -295,24 +295,30 @@ def send_auth_email(to_email, subject, body_html):
     msg.attach(MIMEText(body_html, 'html'))
 
     try:
-        # Set a strict 5-second timeout to prevent 502 Bad Gateway errors on Render
-        server = smtplib.SMTP(smtp_server, smtp_port, timeout=5)
+        # Use SMTP_SSL on port 465 instead of STARTTLS on 587 (better for cloud environments like Render)
+        if smtp_server == 'smtp.gmail.com' or smtp_port == 465:
+            server = smtplib.SMTP_SSL(smtp_server, 465, timeout=5)
+        else:
+            server = smtplib.SMTP(smtp_server, smtp_port, timeout=5)
+            server.starttls()
+        
         server.set_debuglevel(1) # Enable debug output for the terminal logs
-        server.starttls()
         server.login(smtp_user, smtp_pass)
         server.send_message(msg)
         server.quit()
         return True
     except smtplib.SMTPAuthenticationError as e:
-        print(f"\n[SMTP AUTH ERROR] Failed to login to {smtp_server}:{smtp_port} with {smtp_user}.")
-        print(f"Details: {e.smtp_code} - {e.smtp_error.decode('utf-8') if isinstance(e.smtp_error, bytes) else e.smtp_error}\n")
-        return False
+        err = f"Auth Error: {e.smtp_error.decode('utf-8') if isinstance(e.smtp_error, bytes) else e.smtp_error}"
+        print(f"\n[SMTP AUTH ERROR] {err}\n")
+        return err
     except TimeoutError:
-        print(f"\n[SMTP TIMEOUT] Connection to {smtp_server} timed out after 5 seconds.\n")
-        return False
+        err = f"Timeout Error: Connection to {smtp_server} timed out."
+        print(f"\n[SMTP TIMEOUT] {err}\n")
+        return err
     except Exception as e:
-        print(f"\n[SMTP GENERAL ERROR] {e}\n")
-        return False
+        err = f"General Error: {e}"
+        print(f"\n[SMTP GENERAL ERROR] {err}\n")
+        return err
 
 # ============================================================
 # ROUTE: Home - redirect based on login state
@@ -734,11 +740,13 @@ course, year_of_study, room_id, dob, gender, aadhaar_number, blood_group, parent
                 </div>
             </div>
             """
-            if send_auth_email(email, "Welcome to Chennakesava Boys Hostel!", body):
+            email_res = send_auth_email(email, "Welcome to Chennakesava Boys Hostel!", body)
+            if email_res is True:
                 flash(f"Student '{name}' registered successfully! A welcome email was sent.", "success")
             else:
                 smtp_srv = os.getenv('SMTP_HOST', 'smtp.office365.com')
-                flash(f"Student '{name}' registered, but the email failed to send via {smtp_srv}. Please check your SMTP configuration.", "error")
+                err_msg = email_res if isinstance(email_res, str) else "Unknown error"
+                flash(f"Student '{name}' registered, but the email failed to send via {smtp_srv}. Error: {err_msg}", "error")
 
             cursor.close(); conn.close()
             return redirect(url_for('admin_dashboard'))
