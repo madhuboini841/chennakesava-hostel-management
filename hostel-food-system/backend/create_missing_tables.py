@@ -9,7 +9,7 @@ conn = psycopg2.connect(
     user=os.getenv('DB_USER', 'root'), 
     password=os.getenv('DB_PASSWORD', ''), 
     dbname=os.getenv('DB_NAME', 'hostel_db'), 
-    autocommit=True
+    
 )
 cursor = conn.cursor()
 

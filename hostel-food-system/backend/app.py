@@ -212,8 +212,7 @@ DB_CONFIG = {
     'user': os.getenv('DB_USER', 'postgres'),
     'password': os.getenv('DB_PASSWORD', ''),
     'dbname': os.getenv('DB_NAME', 'postgres'),
-    'port': os.getenv('DB_PORT', '5432'),
-    'autocommit': True
+    'port': os.getenv('DB_PORT', '5432')
 }
 
 # Require SSL for external/Render connections
@@ -227,6 +226,7 @@ def get_db():
     """Returns a MySQL connection. Call this in each route."""
     try:
         conn = psycopg2.connect(**DB_CONFIG)
+        conn.autocommit = True
         return conn
     except psycopg2.Error as e:
         print(f"[DB ERROR] {e}")

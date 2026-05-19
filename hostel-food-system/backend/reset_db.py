@@ -18,7 +18,7 @@ def reset_db():
         host=os.getenv("DB_HOST", "localhost"),
         user=os.getenv("DB_USER", "root"),
         password=os.getenv("DB_PASSWORD", ""),
-        autocommit=True
+        
     )
     cursor = conn.cursor()
     

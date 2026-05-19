@@ -1,6 +1,6 @@
 import psycopg2
 
-conn = psycopg2.connect(host='localhost', user='root', password='', dbname='hostel_db', autocommit=True)
+conn = psycopg2.connect(host='localhost', user='root', password='', dbname='hostel_db')
 cursor = conn.cursor()
 
 columns = [
