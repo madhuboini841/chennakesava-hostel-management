@@ -296,10 +296,11 @@ def send_auth_email(to_email, subject, body_html):
 
     try:
         # Use SMTP_SSL on port 465 instead of STARTTLS on 587 (better for cloud environments like Render)
+        # source_address=('0.0.0.0', 0) explicitly forces IPv4 to avoid '[Errno 101] Network is unreachable' on IPv6 Render hosts
         if smtp_server == 'smtp.gmail.com' or smtp_port == 465:
-            server = smtplib.SMTP_SSL(smtp_server, 465, timeout=5)
+            server = smtplib.SMTP_SSL(smtp_server, 465, timeout=5, source_address=('0.0.0.0', 0))
         else:
-            server = smtplib.SMTP(smtp_server, smtp_port, timeout=5)
+            server = smtplib.SMTP(smtp_server, smtp_port, timeout=5, source_address=('0.0.0.0', 0))
             server.starttls()
         
         server.set_debuglevel(1) # Enable debug output for the terminal logs
@@ -310,15 +311,15 @@ def send_auth_email(to_email, subject, body_html):
     except smtplib.SMTPAuthenticationError as e:
         err = f"Auth Error: {e.smtp_error.decode('utf-8') if isinstance(e.smtp_error, bytes) else e.smtp_error}"
         print(f"\n[SMTP AUTH ERROR] {err}\n")
-        return err
+        return False
     except TimeoutError:
         err = f"Timeout Error: Connection to {smtp_server} timed out."
         print(f"\n[SMTP TIMEOUT] {err}\n")
-        return err
+        return False
     except Exception as e:
         err = f"General Error: {e}"
         print(f"\n[SMTP GENERAL ERROR] {err}\n")
-        return err
+        return False
 
 # ============================================================
 # ROUTE: Home - redirect based on login state
@@ -745,8 +746,7 @@ course, year_of_study, room_id, dob, gender, aadhaar_number, blood_group, parent
                 flash(f"Student '{name}' registered successfully! A welcome email was sent.", "success")
             else:
                 smtp_srv = os.getenv('SMTP_HOST', 'smtp.office365.com')
-                err_msg = email_res if isinstance(email_res, str) else "Unknown error"
-                flash(f"Student '{name}' registered, but the email failed to send via {smtp_srv}. Error: {err_msg}", "error")
+                flash(f"Student '{name}' registered, but the email failed to send via {smtp_srv}. Please check your SMTP configuration or network restrictions.", "error")
 
             cursor.close(); conn.close()
             return redirect(url_for('admin_dashboard'))
