@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Student Profile — CBH Admin</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+      <div class="flash-messages" id="flashMessages">
+        {% for category, message in messages %}
+          <div class="flash {{ category }}">
+            {% if category == 'success' %}✅{% elif category == 'error' %}❌{% else %}ℹ️{% endif %}
+            {{ message }}
+          </div>
+        {% endfor %}
+      </div>
+    {% endif %}
+  {% endwith %}
+
+  <div class="dashboard-layout">
+    <aside class="sidebar">
+      <div class="sidebar-header">
+        <div class="brand">🏠 CBH</div>
+        <div class="tagline">Admin Panel</div>
+      </div>
+      <div class="sidebar-user">
+        <div class="user-avatar" style="background:var(--accent)">A</div>
+        <div class="user-info">
+          <div class="name">{{ session['user_name'] }}</div>
+          <div class="role">Administrator</div>
+        </div>
+      </div>
+      <nav class="sidebar-nav">
+        <ul>
+          <li class="nav-item"><a href="/admin/dashboard"><span class="nav-icon">📊</span> Back to Dashboard</a></li>
+        </ul>
+      </nav>
+      <div class="sidebar-footer">
+        <a href="{{ url_for('change_password') }}">🔐 Change Password</a>
+        <a href="/logout">🚪 Logout</a>
+      </div>
+    </aside>
+
+    <div class="main-content">
+      <div class="top-header">
+        <div class="page-title">👨‍🎓 Student Profile: {{ student.name }}</div>
+        <div class="header-full-name" style="font-weight: 700; color: var(--primary); display: flex; align-items: center; justify-content: center; flex: 1;">Chennakesava Boys Hostel</div>
+        <div class="header-actions">
+          <a href="/admin/dashboard#students" class="btn btn-sm btn-info">← Back to Students</a>
+        </div>
+      </div>
+
+      <div class="page-body">
+        <div class="two-col">
+          <!-- Personal Info Card -->
+          <div class="card">
+            <div class="card-header">
+              <div class="card-title">👤 Details overview</div>
+            </div>
+            <div class="card-body">
+              <div class="info-grid">
+                <div class="info-item">
+                  <div class="info-label">Full Name</div>
+                  <div class="info-value">{{ student.name }}</div>
+                </div>
+                <div class="info-item">
+                  <div class="info-label">Email</div>
+                  <div class="info-value">{{ student.email }}</div>
+                </div>
+                <div class="info-item">
+                  <div class="info-label">Mobile Number</div>
+                  <div class="info-value">{{ student.mobile_number or '—' }}</div>
+                </div>
+                <div class="info-item">
+                  <div class="info-label">Parent Number</div>
+                  <div class="info-value">{{ student.parent_number or '—' }}</div>
+                </div>
+                <div class="info-item">
+                  <div class="info-label">Roll Number</div>
+                  <div class="info-value">{{ student.roll_number or '—' }}</div>
+                </div>
+                <div class="info-item">
+                  <div class="info-label">Course & Year</div>
+                  <div class="info-value">{{ student.course or '—' }} - Year {{ student.year_of_study or '—' }}</div>
+                </div>
+                <div class="info-item">
+                  <div class="info-label">Join Date</div>
+                  <div class="info-value">{{ student.join_date }}</div>
+                </div>
+                <div class="info-item">
+                  <div class="info-label">Room Number</div>
+                  <div class="info-value">
+                     {% if student.room_number %}
+                       <span class="badge badge-success">{{ student.room_number }}</span>
+                     {% else %}
+                       <span class="badge badge-warning">Unassigned</span>
+                     {% endif %}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          
+          <!-- Activity Logs Card -->
+          <div class="card">
+            <div class="card-header">
+              <div class="card-title">📜 Activity Logs</div>
+            </div>
+            <div class="table-wrap" style="max-height: 250px; overflow-y: auto;">
+              <table>
+                <thead>
+                  <tr><th>Date & Time</th><th>Action Taken</th></tr>
+                </thead>
+                <tbody>
+                  {% for log in activity_logs %}
+                  <tr>
+                    <td style="font-size:12px;color:#777">{{ log.created_at.strftime('%d %b %Y, %H:%M') if log.created_at else '' }}</td>
+                    <td style="font-size:13px">{{ log.action }}</td>
+                  </tr>
+                  {% else %}
+                  <tr><td colspan="2" style="text-align:center;color:#999;padding:12px">No activity logs found.</td></tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- Fees & Complaints Two Col -->
+        <div class="two-col" style="margin-top:20px;">
+          <!-- Fees Table Card -->
+          <div class="card" style="grid-column:span 1;">
+            <div class="card-header">
+              <div class="card-title">💰 Fee History</div>
+            </div>
+            <div class="table-wrap" style="max-height: 350px; overflow-y: auto;">
+              <table>
+                <thead>
+                  <tr><th>Month</th><th>Amount</th><th>Status</th><th>Due</th></tr>
+                </thead>
+                <tbody>
+                  {% for f in fees %}
+                  <tr>
+                    <td><strong>{{ f.month }}</strong></td>
+                    <td>₹{{ "%.0f"|format(f.amount) }}</td>
+                    <td>
+                      {% if f.status == 'paid' %}<span class="badge badge-success">✅ Paid</span>
+                      {% elif f.status == 'overdue' %}<span class="badge badge-danger">⚠️ Overdue</span>
+                      {% else %}<span class="badge badge-warning">⏳ Pending</span>{% endif %}
+                    </td>
+                    <td style="font-size:12px;color:#777">{{ f.due_date }}</td>
+                  </tr>
+                  {% else %}
+                  <tr><td colspan="4" style="text-align:center;color:#999;padding:12px">No fee records.</td></tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- Complaints Table Card -->
+          <div class="card" style="grid-column:span 1;">
+            <div class="card-header">
+              <div class="card-title">📝 Submitted Complaints</div>
+            </div>
+            <div class="table-wrap" style="max-height: 350px; overflow-y: auto;">
+              <table>
+                <thead>
+                  <tr><th>Date</th><th>Category</th><th>Title</th><th>Status</th></tr>
+                </thead>
+                <tbody>
+                  {% for c in complaints %}
+                  <tr>
+                    <td style="font-size:12px;color:#777">{{ c.submitted_at.strftime('%d %b %Y') if c.submitted_at else '' }}</td>
+                    <td><span style="font-size:12px">{{ c.category|title }}</span></td>
+                    <td><strong>{{ c.title }}</strong></td>
+                    <td>
+                      {% if c.status == 'open' %}<span class="badge badge-open">Open</span>
+                      {% elif c.status == 'in_progress' %}<span class="badge badge-progress">In Prog</span>
+                      {% else %}<span class="badge badge-resolved">Resolved</span>{% endif %}
+                    </td>
+                  </tr>
+                  {% else %}
+                  <tr><td colspan="4" style="text-align:center;color:#999;padding:12px">No complaints found.</td></tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+        
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // Auto-hide flash messages
+    setTimeout(() => {
+      const f = document.getElementById('flashMessages');
+      if (f) { f.style.opacity = '0'; f.style.transition = 'opacity 0.5s'; setTimeout(() => f.remove(), 500); }
+    }, 4000);
+  </script>
+</body>
+</html>

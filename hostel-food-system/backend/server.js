@@ -1,50 +1,22 @@
-const express = require('express');
-const cors = require('cors');
-const path = require('path');
-require('dotenv').config();
+const { spawn } = require('child_process');
 
-const authRoutes = require('./routes/auth');
-const studentRoutes = require('./routes/student');
-const adminRoutes = require('./routes/admin');
-const initCronJobs = require('./utils/cron');
-require('./db'); // Initializes SQLite DB
-const connectMongo = require('./db/mongo'); // MongoDB Connection
+console.log("Starting Python Flask App via Node Bridge...");
 
-const app = express();
-connectMongo(); // Initialize MongoDB
-app.use(cors({
-    origin: process.env.FRONTEND_URL || 'http://localhost:5173',
-    credentials: true
-}));
-app.use(express.json());
+const port = process.env.PORT || 10000;
+const host = '0.0.0.0';
 
-// Routes
-app.use('/api/auth', authRoutes);
-app.use('/api/student', studentRoutes);
-app.use('/api/admin', adminRoutes);
+// Spawn gunicorn to serve the Flask app
+const pythonProcess = spawn('python3', ['-m', 'gunicorn', 'app:app', '--bind', `${host}:${port}`]);
 
-// Health check
-app.get('/api/health', (req, res) => {
-    res.json({ status: 'ok', serverTime: new Date() });
+pythonProcess.stdout.on('data', (data) => {
+    process.stdout.write(`Python: ${data}`);
 });
 
-// Start Cron Jobs
-initCronJobs();
-
-// Serve frontend static files in production
-app.use(express.static(path.join(__dirname, '../frontend/dist')));
-
-// Catch-all route to serve React app
-app.get(/.*/, (req, res) => {
-    res.sendFile(path.join(__dirname, '../frontend/dist/index.html'), (err) => {
-        if (err) {
-            res.status(500).send("Frontend build not found. Please ensure the frontend is built.");
-        }
-    });
+pythonProcess.stderr.on('data', (data) => {
+    process.stderr.write(`Python Error: ${data}`);
 });
 
-const PORT = process.env.PORT || 5000;
-app.listen(PORT, '0.0.0.0', () => {
-    console.log("Server running on port " + PORT);
+pythonProcess.on('close', (code) => {
+    console.log(`Python process exited with code ${code}`);
+    process.exit(code);
 });
-
