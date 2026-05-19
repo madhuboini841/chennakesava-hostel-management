@@ -23,8 +23,11 @@ from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 import secrets
 import string
+import time
 
-load_dotenv()
+# Explicitly load .env from the backend directory to ensure Gmail settings apply in production
+env_path = os.path.join(os.path.dirname(__file__), '.env')
+load_dotenv(env_path, override=True)
 
 app = Flask(__name__)
 CORS(app, supports_credentials=True)
@@ -734,7 +737,8 @@ course, year_of_study, room_id, dob, gender, aadhaar_number, blood_group, parent
             if send_auth_email(email, "Welcome to Chennakesava Boys Hostel!", body):
                 flash(f"Student '{name}' registered successfully! A welcome email was sent.", "success")
             else:
-                flash(f"Student '{name}' registered, but the email failed to send. Please check your SMTP configuration.", "error")
+                smtp_srv = os.getenv('SMTP_HOST', 'smtp.office365.com')
+                flash(f"Student '{name}' registered, but the email failed to send via {smtp_srv}. Please check your SMTP configuration.", "error")
 
             cursor.close(); conn.close()
             return redirect(url_for('admin_dashboard'))
