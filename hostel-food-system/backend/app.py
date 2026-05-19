@@ -27,7 +27,7 @@ import time
 
 # Explicitly load .env from the backend directory to ensure Gmail settings apply in production
 env_path = os.path.join(os.path.dirname(__file__), '.env')
-load_dotenv(env_path, override=True)
+load_dotenv(env_path)
 
 app = Flask(__name__)
 CORS(app, supports_credentials=True)
