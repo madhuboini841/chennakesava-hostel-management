@@ -42,7 +42,7 @@ def init_db():
     finally:
         if 'cursor' in locals():
             cursor.close()
-        if 'conn' in locals() and conn.is_connected():
+        if 'conn' in locals() and conn.closed == 0:
             conn.close()
 
 if __name__ == '__main__':
