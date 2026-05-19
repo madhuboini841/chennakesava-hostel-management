@@ -209,11 +209,16 @@ scheduler.start()
 # ============================================================
 DB_CONFIG = {
     'host': os.getenv('DB_HOST', 'localhost'),
-    'user': os.getenv('DB_USER', 'root'),
+    'user': os.getenv('DB_USER', 'postgres'),
     'password': os.getenv('DB_PASSWORD', ''),
-    'dbname': os.getenv('DB_NAME', 'hostel_db'),
+    'dbname': os.getenv('DB_NAME', 'postgres'),
+    'port': os.getenv('DB_PORT', '5432'),
     'autocommit': True
 }
+
+# Require SSL for external/Render connections
+if DB_CONFIG['host'] != 'localhost':
+    DB_CONFIG['sslmode'] = 'require'
 
 # ============================================================
 # DATABASE HELPER: Get a fresh connection

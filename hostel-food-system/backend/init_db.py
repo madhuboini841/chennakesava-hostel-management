@@ -3,13 +3,18 @@ import os
 
 def init_db():
     try:
-        conn = psycopg2.connect(
-            host=os.getenv('DB_HOST', 'localhost'),
-            user=os.getenv('DB_USER', 'postgres'),
-            password=os.getenv('DB_PASSWORD', ''),
-            dbname=os.getenv('DB_NAME', 'postgres'),
-            port=os.getenv('DB_PORT', '5432')
-        )
+        db_host = os.getenv('DB_HOST', 'localhost')
+        conn_args = {
+            'host': db_host,
+            'user': os.getenv('DB_USER', 'postgres'),
+            'password': os.getenv('DB_PASSWORD', ''),
+            'dbname': os.getenv('DB_NAME', 'postgres'),
+            'port': os.getenv('DB_PORT', '5432')
+        }
+        if db_host != 'localhost':
+            conn_args['sslmode'] = 'require'
+            
+        conn = psycopg2.connect(**conn_args)
         conn.autocommit = True
         cursor = conn.cursor()
         
