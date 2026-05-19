@@ -7,7 +7,8 @@ from flask import Flask, render_template, request, redirect, url_for, session, j
 from werkzeug.utils import secure_filename
 from fpdf import FPDF
 from io import BytesIO
-import mysql.connector
+import psycopg2
+import psycopg2.extras
 import bcrypt
 from datetime import date, datetime, timedelta
 import os
@@ -51,7 +52,7 @@ def log_activity(student_id, action):
 def get_setting(key):
     conn = get_db()
     if not conn: return None
-    cursor = conn.cursor(dictionary=True)
+    cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
     cursor.execute("SELECT setting_value FROM settings WHERE setting_key = %s", (key,))
     row = cursor.fetchone()
     cursor.close(); conn.close()
@@ -98,7 +99,7 @@ def check_and_send_due_date_reminders():
     print("[SCHEDULER] Checking fee due dates for reminders...")
     conn = get_db()
     if not conn: return
-    cursor = conn.cursor(dictionary=True)
+    cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
     
     today = date.today()
     cursor.execute("""
@@ -210,7 +211,7 @@ DB_CONFIG = {
     'host': os.getenv('DB_HOST', 'localhost'),
     'user': os.getenv('DB_USER', 'root'),
     'password': os.getenv('DB_PASSWORD', ''),
-    'database': os.getenv('DB_NAME', 'hostel_db'),
+    'dbname': os.getenv('DB_NAME', 'hostel_db'),
     'autocommit': True
 }
 
@@ -220,9 +221,9 @@ DB_CONFIG = {
 def get_db():
     """Returns a MySQL connection. Call this in each route."""
     try:
-        conn = mysql.connector.connect(**DB_CONFIG)
+        conn = psycopg2.connect(**DB_CONFIG)
         return conn
-    except mysql.connector.Error as e:
+    except psycopg2.Error as e:
         print(f"[DB ERROR] {e}")
         return None
 
@@ -235,7 +236,7 @@ def create_default_admin():
     if not conn:
         print("[WARN] Could not connect to DB to create admin.")
         return
-    cursor = conn.cursor(dictionary=True)
+    cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
     cursor.execute("SELECT id FROM admins LIMIT 1")
     if not cursor.fetchone():
         hashed = bcrypt.hashpw("admin123".encode(), bcrypt.gensalt()).decode()
@@ -325,7 +326,7 @@ def login():
             flash("Database connection error. Please try again.", "error")
             return render_template('login.html')
 
-        cursor = conn.cursor(dictionary=True)
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
 
         if role == 'admin':
             cursor.execute("SELECT * FROM admins WHERE email = %s", (email,))
@@ -368,7 +369,7 @@ def forgot_password():
         role = request.form.get('role', 'student')
         
         conn = get_db()
-        cursor = conn.cursor(dictionary=True)
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
         table = 'admins' if role == 'admin' else 'students'
         
         cursor.execute(f"SELECT id, name FROM {table} WHERE email = %s", (email,))
@@ -448,7 +449,7 @@ def reset_password():
             return render_template('reset_password.html', token=token, role=role)
             
         conn = get_db()
-        cursor = conn.cursor(dictionary=True)
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
         table = 'admins' if role == 'admin' else 'students'
         
         cursor.execute(f"SELECT id FROM {table} WHERE reset_token=%s AND reset_token_expiry > NOW()", (token,))
@@ -487,7 +488,7 @@ def change_password():
             return render_template('change_password.html', must_change=must_change)
             
         conn = get_db()
-        cursor = conn.cursor(dictionary=True)
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
         table = 'admins' if is_admin() else 'students'
         
         cursor.execute(f"SELECT password_hash FROM {table} WHERE id=%s", (session['user_id'],))
@@ -585,7 +586,7 @@ def register():
         return redirect(url_for('login'))
 
     conn = get_db()
-    cursor = conn.cursor(dictionary=True)
+    cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
     cursor.execute("SELECT * FROM rooms WHERE status != 'maintenance' ORDER BY room_number")
     rooms = cursor.fetchall()
 
@@ -627,11 +628,11 @@ def register():
             cursor.execute(
                 """INSERT INTO students (name, email, password_hash, mobile_number, parent_number, roll_number, 
 course, year_of_study, room_id, dob, gender, aadhaar_number, blood_group, parent_name, parent_relation, college_name, branch, permanent_address, city, state, pincode, must_change_password)
-                   VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, TRUE)""",
+                   VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, TRUE) RETURNING id""",
                 (name, email, hashed, mobile_number, parent_number, roll_number, course, year_of_study, room_id,
                  dob, gender, aadhaar_number, blood_group, parent_name, parent_relation, college_name, branch, permanent_address, city, state, pincode)
             )
-            student_id = cursor.lastrowid
+            student_id = cursor.fetchone()['id']
 
             # Update room occupancy if room assigned
             if room_id:
@@ -640,7 +641,7 @@ course, year_of_study, room_id, dob, gender, aadhaar_number, blood_group, parent
                 )
                 # Update room status if full
                 cursor.execute(
-                    "UPDATE rooms SET status = IF(current_occupancy >= capacity, 'full', 'available') WHERE id = %s",
+                    "UPDATE rooms SET status = CASE WHEN current_occupancy >= capacity THEN 'full' ELSE 'available' END WHERE id = %s",
                     (room_id,)
                 )
 
@@ -719,7 +720,7 @@ course, year_of_study, room_id, dob, gender, aadhaar_number, blood_group, parent
             cursor.close(); conn.close()
             return redirect(url_for('admin_dashboard'))
 
-        except mysql.connector.IntegrityError as e:
+        except psycopg2.IntegrityError as e:
             flash("Email or Roll Number already exists.", "error")
 
     cursor.close()
@@ -736,7 +737,7 @@ def student_dashboard():
         return redirect(url_for('login'))
 
     conn = get_db()
-    cursor = conn.cursor(dictionary=True)
+    cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
 
     # Get student details with room info
     cursor.execute("""
@@ -854,7 +855,7 @@ def student_food_optout():
     hour = now.hour
     
     conn = get_db()
-    cursor = conn.cursor(dictionary=True)
+    cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
     
     # Get existing to check time bounds
     cursor.execute("SELECT * FROM food_optouts WHERE student_id = %s AND date = %s", (session['user_id'], date_str))
@@ -909,7 +910,7 @@ def submit_complaint():
     conn = get_db()
     cursor = conn.cursor()
     cursor.execute(
-        "INSERT INTO complaints (student_id, title, description, category) VALUES (%s, %s, %s, %s)",
+        "INSERT INTO complaints (student_id, title, description, category) VALUES (%s, %s, %s, %s) RETURNING id",
         (session['user_id'], title, description, category)
     )
     cursor.close()
@@ -930,7 +931,7 @@ def admin_dashboard():
         return redirect(url_for('login'))
 
     conn = get_db()
-    cursor = conn.cursor(dictionary=True)
+    cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
 
     # Summary counts
     cursor.execute("SELECT COUNT(*) as total FROM students WHERE status='active'")
@@ -1093,7 +1094,7 @@ def admin_food_menu():
     items = request.form.get('items', '').strip()
     
     conn = get_db()
-    cursor = conn.cursor(dictionary=True)
+    cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
     
     # Check if locked
     cursor.execute("SELECT is_locked FROM daily_menus WHERE date = %s AND meal_slot = %s AND meal_type = %s",
@@ -1128,7 +1129,7 @@ def edit_food_menu(id):
     items = request.form.get('items', '').strip()
     
     conn = get_db()
-    cursor = conn.cursor(dictionary=True)
+    cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
     cursor.execute("SELECT * FROM daily_menus WHERE id = %s", (id,))
     menu = cursor.fetchone()
     
@@ -1159,7 +1160,7 @@ def delete_food_menu(id):
     if not is_admin(): return redirect(url_for('login'))
     
     conn = get_db()
-    cursor = conn.cursor(dictionary=True)
+    cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
     cursor.execute("SELECT * FROM daily_menus WHERE id = %s", (id,))
     menu = cursor.fetchone()
     
@@ -1266,7 +1267,7 @@ def assign_room(student_id):
     new_room_id = request.form.get('room_id') or None
 
     conn = get_db()
-    cursor = conn.cursor(dictionary=True)
+    cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
 
     # Get current room
     cursor.execute("SELECT room_id FROM students WHERE id = %s", (student_id,))
@@ -1289,7 +1290,7 @@ def assign_room(student_id):
             "UPDATE rooms SET current_occupancy = current_occupancy + 1 WHERE id = %s", (new_room_id,)
         )
         cursor.execute(
-            "UPDATE rooms SET status = IF(current_occupancy >= capacity, 'full', 'available') WHERE id = %s",
+            "UPDATE rooms SET status = CASE WHEN current_occupancy >= capacity THEN 'full' ELSE 'available' END WHERE id = %s",
             (new_room_id,)
         )
 
@@ -1308,7 +1309,7 @@ def delete_student(student_id):
         return jsonify({'error': 'Unauthorized'}), 401
 
     conn = get_db()
-    cursor = conn.cursor(dictionary=True)
+    cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
 
     # Free up the room
     cursor.execute("SELECT room_id FROM students WHERE id = %s", (student_id,))
@@ -1354,7 +1355,7 @@ def add_room():
             (room_number, floor, capacity, room_type, monthly_fee)
         )
         flash(f"Room {room_number} added successfully!", "success")
-    except mysql.connector.IntegrityError:
+    except psycopg2.IntegrityError:
         flash("Room number already exists.", "error")
     cursor.close()
     conn.close()
@@ -1369,7 +1370,7 @@ def api_students():
     if not is_admin():
         return jsonify({'error': 'Unauthorized'}), 401
     conn = get_db()
-    cursor = conn.cursor(dictionary=True)
+    cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
     cursor.execute("""
         SELECT s.id, s.name, s.email, s.roll_number, s.mobile_number, r.room_number
         FROM students s LEFT JOIN rooms r ON s.room_id = r.id
@@ -1384,7 +1385,7 @@ def api_rooms():
     if not is_admin():
         return jsonify({'error': 'Unauthorized'}), 401
     conn = get_db()
-    cursor = conn.cursor(dictionary=True)
+    cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
     cursor.execute("SELECT * FROM rooms ORDER BY room_number")
     rooms = cursor.fetchall()
     cursor.close(); conn.close()
@@ -1434,7 +1435,7 @@ def send_manual_sms():
     message = request.form.get('message', '').strip()
     
     conn = get_db()
-    cursor = conn.cursor(dictionary=True)
+    cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
     cursor.execute("SELECT mobile_number, parent_number FROM students WHERE id=%s", (student_id,))
     student = cursor.fetchone()
     cursor.close(); conn.close()
@@ -1517,7 +1518,7 @@ def edit_student_details(id):
 @app.route('/admin/student/<int:id>')
 def admin_student_profile(id):
     if not is_admin(): return redirect(url_for('login'))
-    conn = get_db(); cursor = conn.cursor(dictionary=True)
+    conn = get_db(); cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
     cursor.execute("SELECT s.*, r.room_number FROM students s LEFT JOIN rooms r ON s.room_id = r.id WHERE s.id=%s", (id,))
     student = cursor.fetchone()
     if not student:
@@ -1553,7 +1554,7 @@ def edit_room(id):
 @app.route('/rooms/delete/<int:id>', methods=['POST'])
 def delete_room(id):
     if not is_admin(): return redirect(url_for('login'))
-    conn = get_db(); cursor = conn.cursor(dictionary=True)
+    conn = get_db(); cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
     cursor.execute("SELECT current_occupancy FROM rooms WHERE id=%s", (id,))
     room = cursor.fetchone()
     if room and room['current_occupancy'] > 0:
@@ -1596,7 +1597,7 @@ def admin_finance():
     month_filter = request.args.get('month', date.today().strftime('%Y-%m'))
     
     conn = get_db()
-    cursor = conn.cursor(dictionary=True)
+    cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
     
     # Get all transactions for the filtered month
     cursor.execute("""
@@ -1703,7 +1704,7 @@ def api_get_student_info(id):
         return jsonify({'error': 'Unauthorized'}), 401
     
     conn = get_db()
-    cursor = conn.cursor(dictionary=True)
+    cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
     cursor.execute("""
         SELECT s.name, r.room_number 
         FROM students s 
@@ -1741,7 +1742,7 @@ def api_create_receipt():
     if not conn:
         return jsonify({'error': 'Database error'}), 500
 
-    cursor = conn.cursor(dictionary=True)
+    cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
     
     try:
         # Insert record first to get the auto-increment ID
@@ -1750,7 +1751,7 @@ def api_create_receipt():
             VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
         """, (student_id, student_name, room_number, amount, payment_type, payment_mode, period, remarks))
         
-        new_id = cursor.lastrowid
+        new_id = cursor.fetchone()['id']
         
         # Generate receipt_number and update the record
         receipt_number = f"RCP{new_id:03d}"
@@ -1772,7 +1773,7 @@ def api_get_all_receipts():
         return jsonify({'error': 'Unauthorized'}), 401
     
     conn = get_db()
-    cursor = conn.cursor(dictionary=True)
+    cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
     cursor.execute("SELECT * FROM fee_receipts ORDER BY created_at DESC")
     receipts = cursor.fetchall()
     cursor.close()
@@ -1786,7 +1787,7 @@ def api_get_student_receipts(student_id):
         return jsonify({'error': 'Unauthorized'}), 401
         
     conn = get_db()
-    cursor = conn.cursor(dictionary=True)
+    cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
     cursor.execute("SELECT * FROM fee_receipts WHERE student_id = %s ORDER BY created_at DESC", (student_id,))
     receipts = cursor.fetchall()
     cursor.close()
@@ -1800,7 +1801,7 @@ def api_get_my_receipts():
         
     student_id = session.get('user_id')
     conn = get_db()
-    cursor = conn.cursor(dictionary=True)
+    cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
     cursor.execute("SELECT * FROM fee_receipts WHERE student_id = %s ORDER BY created_at DESC", (student_id,))
     receipts = cursor.fetchall()
     cursor.close()
@@ -1855,7 +1856,7 @@ def api_delete_receipt(id):
 @app.route('/api/receipts/download/<int:id>', methods=['GET'])
 def api_download_receipt(id):
     conn = get_db()
-    cursor = conn.cursor(dictionary=True)
+    cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
     cursor.execute("""
         SELECT fr.*, s.roll_number, s.course, s.year_of_study 
         FROM fee_receipts fr
@@ -2131,7 +2132,7 @@ def api_student_profile():
         return jsonify({'error': 'Unauthorized'}), 401
     
     conn = get_db()
-    cursor = conn.cursor(dictionary=True)
+    cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
     
     cursor.execute("""
         SELECT s.id, s.name, s.email, s.mobile_number, s.course, s.year_of_study, s.roll_number, s.status,
@@ -2162,7 +2163,7 @@ def api_student_complaints():
         return jsonify({'error': 'Unauthorized'}), 401
     
     conn = get_db()
-    cursor = conn.cursor(dictionary=True)
+    cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
     
     if request.method == 'POST':
         data = request.json
@@ -2196,7 +2197,7 @@ def api_student_fee_status():
         return jsonify({'error': 'Unauthorized'}), 401
         
     conn = get_db()
-    cursor = conn.cursor(dictionary=True)
+    cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
     cursor.execute("SELECT * FROM fees WHERE student_id = %s ORDER BY year DESC, month DESC, id DESC", (student_id,))
     fees = cursor.fetchall()
     for f in fees:
@@ -2211,7 +2212,7 @@ def api_student_notices():
         return jsonify({'error': 'Unauthorized'}), 401
         
     conn = get_db()
-    cursor = conn.cursor(dictionary=True)
+    cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
     cursor.execute("SELECT * FROM notices ORDER BY created_at DESC LIMIT 20")
     notices = cursor.fetchall()
     for n in notices:
@@ -2226,7 +2227,7 @@ def api_student_receipts():
         return jsonify({'error': 'Unauthorized'}), 401
         
     conn = get_db()
-    cursor = conn.cursor(dictionary=True)
+    cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
     cursor.execute("SELECT * FROM fee_receipts WHERE student_id = %s ORDER BY created_at DESC", (student_id,))
     receipts = cursor.fetchall()
     for r in receipts:

@@ -1,13 +1,16 @@
-import mysql.connector
+import psycopg2
+import os
 
 def init_db():
     try:
-        conn = mysql.connector.connect(
-            host='localhost',
-            user='root',
-            password='',
-            autocommit=True
+        conn = psycopg2.connect(
+            host=os.getenv('DB_HOST', 'localhost'),
+            user=os.getenv('DB_USER', 'postgres'),
+            password=os.getenv('DB_PASSWORD', ''),
+            dbname=os.getenv('DB_NAME', 'postgres'),
+            port=os.getenv('DB_PORT', '5432')
         )
+        conn.autocommit = True
         cursor = conn.cursor()
         
         with open('database.sql', 'r') as f:

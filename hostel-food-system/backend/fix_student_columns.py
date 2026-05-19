@@ -1,6 +1,6 @@
-import mysql.connector
+import psycopg2
 
-conn = mysql.connector.connect(host='localhost', user='root', password='', database='hostel_db', autocommit=True)
+conn = psycopg2.connect(host='localhost', user='root', password='', dbname='hostel_db', autocommit=True)
 cursor = conn.cursor()
 
 columns = [
@@ -23,7 +23,7 @@ for col_name, col_type in columns:
     try:
         cursor.execute(f"ALTER TABLE students ADD COLUMN {col_name} {col_type}")
         print(f"Added {col_name}")
-    except mysql.connector.Error as err:
+    except psycopg2.Error as err:
         if err.errno == 1060: # Duplicate column name
             print(f"Column {col_name} already exists")
         else:

@@ -1,4 +1,4 @@
-import mysql.connector
+import psycopg2
 import os
 from dotenv import load_dotenv
 
@@ -14,7 +14,7 @@ DB_CONFIG = {
 
 def add_columns():
     try:
-        conn = mysql.connector.connect(**DB_CONFIG)
+        conn = psycopg2.connect(**DB_CONFIG)
         cursor = conn.cursor()
         
         tables = ['admins', 'students']
@@ -29,7 +29,7 @@ def add_columns():
                 try:
                     cursor.execute(f"ALTER TABLE {table} ADD COLUMN {col_name} {col_type}")
                     print(f"Added {col_name} to {table}")
-                except mysql.connector.Error as e:
+                except psycopg2.Error as e:
                     if e.errno == 1060: # Duplicate column name
                         print(f"Column {col_name} already exists in {table}")
                     else:

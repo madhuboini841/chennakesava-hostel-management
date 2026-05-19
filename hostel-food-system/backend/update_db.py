@@ -1,4 +1,4 @@
-import mysql.connector
+import psycopg2
 
 DB_CONFIG = {
     'host': 'localhost',
@@ -10,14 +10,14 @@ DB_CONFIG = {
 
 def update_schema():
     try:
-        conn = mysql.connector.connect(**DB_CONFIG)
+        conn = psycopg2.connect(**DB_CONFIG)
         cursor = conn.cursor()
 
         # 1. Add meal_preference to students if not exists
         try:
             cursor.execute("ALTER TABLE students ADD COLUMN meal_preference ENUM('veg', 'non-veg') DEFAULT 'veg';")
             print("Added meal_preference to students table.")
-        except mysql.connector.Error as e:
+        except psycopg2.Error as e:
             if e.errno == 1060: # Duplicate column name
                 print("Column meal_preference already exists.")
             else:
@@ -60,7 +60,7 @@ def update_schema():
         conn.close()
         print("Schema update completed successfully.")
 
-    except mysql.connector.Error as e:
+    except psycopg2.Error as e:
         print(f"Database connection failed: {e}")
 
 if __name__ == "__main__":
