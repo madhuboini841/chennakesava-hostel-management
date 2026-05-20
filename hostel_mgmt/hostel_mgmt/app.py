@@ -720,7 +720,21 @@ course, year_of_study, room_id, dob, gender, aadhaar_number, blood_group, parent
             return redirect(url_for('admin_dashboard'))
 
         except mysql.connector.IntegrityError as e:
-            flash("Email or Roll Number already exists.", "error")
+            conn.rollback()
+            error_msg = str(e).replace('\n', ' | ')
+            db_engine = "MySQL"
+            conn_host = DB_CONFIG.get('host', 'unknown')
+            conn_db = DB_CONFIG.get('database', 'unknown')
+            
+            trace_log = (
+                f"🚨 [TRACE DBG] ENGINE: {db_engine} | HOST: {conn_host} | DB: {conn_db} | "
+                f"ERRNO: {getattr(e, 'errno', 'N/A')} | SQLSTATE: {getattr(e, 'sqlstate', 'N/A')} | "
+                f"MSG: {error_msg}"
+            )
+                
+            flash(trace_log, "error")
+            # Also print to terminal for server logs
+            print(trace_log)
 
     cursor.close()
     conn.close()
@@ -1300,6 +1314,64 @@ def assign_room(student_id):
     return redirect(url_for('admin_dashboard'))
 
 # ============================================================
+# ROUTE: Temporary Database Cleanup Endpoint (Admin)
+# ============================================================
+@app.route('/admin/force_cleanup', methods=['GET'])
+def force_cleanup():
+    if not is_admin():
+        return jsonify({'error': 'Unauthorized'}), 401
+
+    email = request.args.get('email', '').strip()
+    roll_number = request.args.get('roll_number', '').strip()
+
+    if not email and not roll_number:
+        return jsonify({'error': 'Please provide email or roll_number parameter.'}), 400
+
+    conn = get_db()
+    cursor = conn.cursor(dictionary=True)
+    log = {"tables_checked": [], "records_deleted": {}, "status": "success"}
+
+    try:
+        # Check students table
+        cursor.execute("SELECT id FROM students WHERE email = %s OR roll_number = %s", (email, roll_number))
+        students = cursor.fetchall()
+        if students:
+            log['records_deleted']['students'] = len(students)
+            for s in students:
+                cursor.execute("DELETE FROM students WHERE id = %s", (s['id'],))
+        else:
+            log['records_deleted']['students'] = 0
+
+        # Check users table in current DB
+        if email:
+            cursor.execute("SHOW TABLES LIKE 'users'")
+            if cursor.fetchone():
+                cursor.execute("SELECT * FROM users WHERE email = %s", (email,))
+                users = cursor.fetchall()
+                log['records_deleted']['users_hostel'] = len(users)
+                if users:
+                    cursor.execute("DELETE FROM users WHERE email = %s", (email,))
+
+        # Check admins table
+        if email:
+            cursor.execute("SELECT id FROM admins WHERE email = %s", (email,))
+            admins = cursor.fetchall()
+            log['records_deleted']['admins'] = len(admins)
+            if admins:
+                cursor.execute("DELETE FROM admins WHERE email = %s", (email,))
+
+        conn.commit()
+    except Exception as e:
+        conn.rollback()
+        log['status'] = "error"
+        log['error_message'] = str(e)
+    finally:
+        cursor.close()
+        conn.close()
+
+    return jsonify(log)
+
+# ============================================================
 # ROUTE: Delete/Deactivate Student (Admin)
 # ============================================================
 @app.route('/students/delete/<int:student_id>', methods=['POST'])
@@ -1311,8 +1383,10 @@ def delete_student(student_id):
     cursor = conn.cursor(dictionary=True)
 
     # Free up the room
-    cursor.execute("SELECT room_id FROM students WHERE id = %s", (student_id,))
+    cursor.execute("SELECT room_id, email FROM students WHERE id = %s", (student_id,))
     student = cursor.fetchone()
+    student_email = student['email'] if student else None
+    
     if student and student['room_id']:
         cursor.execute(
             "UPDATE rooms SET current_occupancy = GREATEST(0, current_occupancy - 1), status = 'available' WHERE id = %s",
@@ -1321,6 +1395,21 @@ def delete_student(student_id):
 
     # Hard delete student (will cascade to fees, complaints, etc.)
     cursor.execute("DELETE FROM students WHERE id = %s", (student_id,))
+    
+    # Hard delete from users table (if used by external auth/PHP app)
+    if student_email:
+        # Check if users table exists in current DB
+        cursor.execute("SHOW TABLES LIKE 'users'")
+        if cursor.fetchone():
+            cursor.execute("DELETE FROM users WHERE email = %s", (student_email,))
+            
+        # Check if test database exists and has users table
+        cursor.execute("SHOW DATABASES LIKE 'test'")
+        if cursor.fetchone():
+            cursor.execute("SHOW TABLES FROM test LIKE 'users'")
+            if cursor.fetchone():
+                cursor.execute("DELETE FROM test.users WHERE email = %s", (student_email,))
+
     conn.commit()
     cursor.close()
     conn.close()
