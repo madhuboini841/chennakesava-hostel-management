@@ -591,9 +591,12 @@ def register():
 
     if request.method == 'POST':
         name = request.form.get('name', '').strip()
-        email = request.form.get('new_student_email', '').strip()
+        email = request.form.get('new_student_email') or request.form.get('email', '')
+        email = email.strip()
         
-        password = request.form.get('new_student_password', '').strip()
+        password = request.form.get('new_student_password') or request.form.get('password', '')
+        password = password.strip()
+        
         mobile_number = request.form.get('mobile_number', '').strip()
         parent_number = request.form.get('parent_number', '').strip()
         roll_number = request.form.get('roll_number', '').strip()
