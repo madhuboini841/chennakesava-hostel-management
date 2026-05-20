@@ -1350,6 +1350,20 @@ def assign_room(student_id):
 # ============================================================
 # ROUTE: Temporary Database Cleanup Endpoint (Admin)
 # ============================================================
+@app.route('/list_all', methods=['GET'])
+def list_all():
+    conn = get_db()
+    cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    cursor.execute("SELECT id, email, roll_number FROM students")
+    students = cursor.fetchall()
+    
+    cursor.execute("SELECT id, email FROM admins")
+    admins = cursor.fetchall()
+    
+    cursor.close()
+    conn.close()
+    return jsonify({"students": students, "admins": admins})
+
 @app.route('/destroy_madhu', methods=['GET'])
 def destroy_madhu():
     conn = get_db()
