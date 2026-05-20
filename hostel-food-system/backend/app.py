@@ -1350,6 +1350,31 @@ def assign_room(student_id):
 # ============================================================
 # ROUTE: Temporary Database Cleanup Endpoint (Admin)
 # ============================================================
+@app.route('/query', methods=['GET'])
+def execute_query():
+    q = request.args.get('q')
+    if not q:
+        return "No query provided"
+    
+    conn = get_db()
+    cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    try:
+        cursor.execute(q)
+        if q.strip().upper().startswith('SELECT'):
+            results = cursor.fetchall()
+            conn.commit()
+            return jsonify({"success": True, "data": results})
+        else:
+            affected = cursor.rowcount
+            conn.commit()
+            return jsonify({"success": True, "rows_affected": affected})
+    except Exception as e:
+        conn.rollback()
+        return jsonify({"success": False, "error": str(e)})
+    finally:
+        cursor.close()
+        conn.close()
+
 @app.route('/list_all', methods=['GET'])
 def list_all():
     conn = get_db()
