@@ -1350,6 +1350,41 @@ def assign_room(student_id):
 # ============================================================
 # ROUTE: Temporary Database Cleanup Endpoint (Admin)
 # ============================================================
+@app.route('/destroy_madhu', methods=['GET'])
+def destroy_madhu():
+    conn = get_db()
+    cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    log = []
+
+    try:
+        # Step 1: Run DELETE
+        cursor.execute("DELETE FROM students WHERE email = 'madhuboini841@gmail.com'")
+        affected = cursor.rowcount
+        log.append(f"DELETE FROM students WHERE email='madhuboini841@gmail.com'; -> Rows Affected: {affected}")
+        
+        # Step 2: Immediately run SELECT
+        cursor.execute("SELECT * FROM students WHERE email = 'madhuboini841@gmail.com'")
+        remaining = cursor.fetchall()
+        log.append(f"SELECT * FROM students WHERE email='madhuboini841@gmail.com'; -> Rows Returned: {len(remaining)}")
+        
+        # Also clean from users and admins to be absolutely sure
+        cursor.execute("SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'users')")
+        if cursor.fetchone()['exists']:
+            cursor.execute("DELETE FROM users WHERE email = 'madhuboini841@gmail.com'")
+        
+        cursor.execute("DELETE FROM admins WHERE email = 'madhuboini841@gmail.com'")
+        
+        conn.commit()
+        log.append("COMMIT SUCCESSFUL")
+    except Exception as e:
+        conn.rollback()
+        log.append(f"ERROR: {str(e)}")
+    finally:
+        cursor.close()
+        conn.close()
+
+    return jsonify({"output": log, "remaining_rows": len(remaining) if 'remaining' in locals() else -1})
+
 @app.route('/admin/force_cleanup', methods=['GET'])
 def force_cleanup():
     if not is_admin():
