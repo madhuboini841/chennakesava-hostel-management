@@ -1414,38 +1414,52 @@ def delete_student(student_id):
 
     conn = get_db()
     cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    log = []
 
-    # Free up the room
-    cursor.execute("SELECT room_id, email FROM students WHERE id = %s", (student_id,))
-    student = cursor.fetchone()
-    student_email = student['email'] if student else None
-    
-    if student and student['room_id']:
-        cursor.execute(
-            "UPDATE rooms SET current_occupancy = GREATEST(0, current_occupancy - 1), status = 'available' WHERE id = %s",
-            (student['room_id'],)
-        )
+    try:
+        # Free up the room
+        cursor.execute("SELECT room_id, email FROM students WHERE id = %s", (student_id,))
+        student = cursor.fetchone()
+        student_email = student['email'] if student else None
+        
+        if student and student['room_id']:
+            cursor.execute(
+                "UPDATE rooms SET current_occupancy = GREATEST(0, current_occupancy - 1), status = 'available' WHERE id = %s",
+                (student['room_id'],)
+            )
 
-    # Hard delete student (will cascade to fees, complaints, etc.)
-    cursor.execute("DELETE FROM students WHERE id = %s", (student_id,))
-    
-    # Hard delete from users table (if used by external auth/PHP app)
-    if student_email:
-        # Check if users table exists first to avoid transaction aborts
-        cursor.execute("""
-            SELECT EXISTS (
-                SELECT FROM information_schema.tables 
-                WHERE table_schema = 'public' AND table_name = 'users'
-            );
-        """)
-        if cursor.fetchone()['exists']:
-            cursor.execute("DELETE FROM users WHERE email = %s", (student_email,))
+        # Hard delete student (will cascade to fees, complaints, etc.)
+        cursor.execute("DELETE FROM students WHERE id = %s", (student_id,))
+        affected = cursor.rowcount
+        log.append(f"DELETE students WHERE id={student_id} -> Rows Affected: {affected}")
+        
+        # Hard delete from users table (if used by external auth/PHP app)
+        if student_email:
+            cursor.execute("""
+                SELECT EXISTS (
+                    SELECT FROM information_schema.tables 
+                    WHERE table_schema = 'public' AND table_name = 'users'
+                );
+            """)
+            if cursor.fetchone()['exists']:
+                cursor.execute("DELETE FROM users WHERE email = %s", (student_email,))
+                log.append(f"DELETE users WHERE email={student_email} -> Rows Affected: {cursor.rowcount}")
 
-    conn.commit()
-    cursor.close()
-    conn.close()
+        # Check specifically for madhuboini841@gmail.com
+        cursor.execute("SELECT id FROM students WHERE email = 'madhuboini841@gmail.com'")
+        madhu_exists = cursor.fetchone()
+        log.append(f"madhuboini841@gmail.com STILL IN DB: {'YES (ID '+str(madhu_exists['id'])+')' if madhu_exists else 'NO'}")
 
-    flash("Student removed successfully!", "success")
+        conn.commit()
+        log.append("COMMIT SUCCESSFUL")
+        flash(f"✅ [TRACE DBG] " + " | ".join(log), "success")
+    except Exception as e:
+        conn.rollback()
+        flash(f"❌ [TRACE DBG] DELETE FAILED: {str(e)}", "error")
+    finally:
+        cursor.close()
+        conn.close()
+
     return redirect(url_for('admin_dashboard'))
 
 # ============================================================
