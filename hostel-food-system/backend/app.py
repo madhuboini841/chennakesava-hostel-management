@@ -283,10 +283,10 @@ def generate_temp_password(length=8):
     return ''.join(secrets.choice(alphabet) for i in range(length))
 
 def send_auth_email(to_email, subject, body_html):
-    smtp_server = os.getenv('SMTP_HOST', 'smtp.office365.com')
+    smtp_server = os.getenv('SMTP_HOST', 'smtp.gmail.com')
     smtp_port = int(os.getenv('SMTP_PORT', 587))
-    smtp_user = os.getenv('EMAIL_USER', 'chennakesavahostel@outlook.com')
-    smtp_pass = os.getenv('EMAIL_PASS', 'ucgnftwsfdbdgizk')
+    smtp_user = os.getenv('SMTP_EMAIL')
+    smtp_pass = os.getenv('SMTP_PASSWORD')
 
     msg = MIMEMultipart()
     msg['From'] = smtp_user
@@ -307,19 +307,19 @@ def send_auth_email(to_email, subject, body_html):
         server.login(smtp_user, smtp_pass)
         server.send_message(msg)
         server.quit()
-        return True
+        return True, ""
     except smtplib.SMTPAuthenticationError as e:
         err = f"Auth Error: {e.smtp_error.decode('utf-8') if isinstance(e.smtp_error, bytes) else e.smtp_error}"
         print(f"\n[SMTP AUTH ERROR] {err}\n")
-        return False
+        return False, err
     except TimeoutError:
         err = f"Timeout Error: Connection to {smtp_server} timed out."
         print(f"\n[SMTP TIMEOUT] {err}\n")
-        return False
+        return False, err
     except Exception as e:
         err = f"General Error: {e}"
         print(f"\n[SMTP GENERAL ERROR] {err}\n")
-        return False
+        return False, err
 
 # ============================================================
 # ROUTE: Home - redirect based on login state
@@ -441,10 +441,11 @@ def forgot_password():
                 </div>
             </div>
             """
-            if send_auth_email(email, "Password Reset", body):
+            success, err_msg = send_auth_email(email, "Password Reset", body)
+            if success:
                 flash("A password reset link has been sent to your email.", "success")
             else:
-                flash("Failed to send email. Please check the server configuration or try again later.", "error")
+                flash(f"Failed to send email. Error: {err_msg}", "error")
         else:
             flash("If that email is registered, you will receive a reset link.", "info")
             
@@ -653,6 +654,23 @@ def register():
             cursor.close(); conn.close()
             return render_template('register.html', rooms=rooms)
 
+        # Check if email is already registered
+        cursor.execute("SELECT id FROM students WHERE email = %s", (email,))
+        if cursor.fetchone():
+            flash(f"Error: The email address '{email}' is already registered.", "error")
+            cursor.close()
+            conn.close()
+            return render_template('register.html', rooms=rooms)
+
+        # Check if roll number is already registered (if provided)
+        if roll_number:
+            cursor.execute("SELECT id FROM students WHERE roll_number = %s", (roll_number,))
+            if cursor.fetchone():
+                flash(f"Error: The roll number '{roll_number}' is already registered.", "error")
+                cursor.close()
+                conn.close()
+                return render_template('register.html', rooms=rooms)
+
         # Hash the password
         hashed = bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
 
@@ -744,36 +762,26 @@ course, year_of_study, room_id, dob, gender, aadhaar_number, blood_group, parent
                 </div>
             </div>
             """
-            email_res = send_auth_email(email, "Welcome to Chennakesava Boys Hostel!", body)
-            if email_res is True:
+            success, err_msg = send_auth_email(email, "Welcome to Chennakesava Boys Hostel!", body)
+            if success:
                 flash(f"Student '{name}' registered successfully! A welcome email was sent.", "success")
             else:
-                smtp_srv = os.getenv('SMTP_HOST', 'smtp.office365.com')
-                flash(f"Student '{name}' registered, but the email failed to send via {smtp_srv}. Please check your SMTP configuration or network restrictions.", "error")
+                flash(f"Student '{name}' registered, but the email failed to send. Error: {err_msg}", "error")
 
             cursor.close(); conn.close()
             return redirect(url_for('admin_dashboard'))
 
         except psycopg2.IntegrityError as e:
             conn.rollback()
-            error_msg = str(e).replace('\n', ' | ')
-            db_engine = "PostgreSQL"
-            conn_host = DB_CONFIG.get('host', 'unknown')
-            conn_db = DB_CONFIG.get('database', 'unknown')
-            diag = getattr(e, 'diag', None)
-            
-            trace_log = (
-                f"🚨 [TRACE DBG] ENGINE: {db_engine} | HOST: {conn_host} | DB: {conn_db} | "
-                f"SQL_STATE: {getattr(e, 'pgcode', 'N/A')} | "
-                f"RAW_ERR: {error_msg} | "
-            )
-            
-            if diag:
-                trace_log += f"TABLE: {getattr(diag, 'table_name', 'N/A')} | CONSTRAINT: {getattr(diag, 'constraint_name', 'N/A')} | DETAIL: {getattr(diag, 'message_detail', 'N/A')}"
-                
-            flash(trace_log, "error")
+            error_msg = str(e).lower()
+            if 'duplicate' in error_msg and 'email' in error_msg:
+                flash(f"Error: The email address '{email}' is already registered.", "error")
+            elif 'duplicate' in error_msg and 'roll_number' in error_msg:
+                flash(f"Error: The roll number '{roll_number}' is already registered.", "error")
+            else:
+                flash("Error: A student with this information already exists (Duplicate Entry).", "error")
             # Also print to terminal for server logs
-            print(trace_log)
+            print(f"🚨 [DB ERROR] {e}")
     conn.close()
     return render_template('register.html', rooms=rooms)
 
