@@ -282,14 +282,15 @@ def send_auth_email(to_email, subject, body_html):
         server.login(smtp_user, smtp_pass)
         server.send_message(msg)
         server.quit()
-        return True
+        return True, ""
     except smtplib.SMTPAuthenticationError as e:
-        print(f"\n[SMTP AUTH ERROR] Failed to login to {smtp_server}:{smtp_port} with {smtp_user}.")
-        print(f"Details: {e.smtp_code} - {e.smtp_error.decode('utf-8') if isinstance(e.smtp_error, bytes) else e.smtp_error}\n")
-        return False
+        error_msg = f"Authentication failed. Please check your App Password. Details: {e.smtp_code} - {e.smtp_error.decode('utf-8') if isinstance(e.smtp_error, bytes) else e.smtp_error}"
+        print(f"\n[SMTP AUTH ERROR] {error_msg}\n")
+        return False, error_msg
     except Exception as e:
-        print(f"\n[SMTP GENERAL ERROR] {e}\n")
-        return False
+        error_msg = str(e)
+        print(f"\n[SMTP GENERAL ERROR] {error_msg}\n")
+        return False, error_msg
 
 # ============================================================
 # ROUTE: Home - redirect based on login state
@@ -411,10 +412,11 @@ def forgot_password():
                 </div>
             </div>
             """
-            if send_auth_email(email, "Password Reset", body):
+            success, err_msg = send_auth_email(email, "Password Reset", body)
+            if success:
                 flash("A password reset link has been sent to your email.", "success")
             else:
-                flash("Failed to send email. Please check the server configuration or try again later.", "error")
+                flash(f"Failed to send email. Error: {err_msg}", "error")
         else:
             flash("If that email is registered, you will receive a reset link.", "info")
             
@@ -731,10 +733,11 @@ course, year_of_study, room_id, dob, gender, aadhaar_number, blood_group, parent
                 </div>
             </div>
             """
-            if send_auth_email(email, "Welcome to Chennakesava Boys Hostel!", body):
+            success, err_msg = send_auth_email(email, "Welcome to Chennakesava Boys Hostel!", body)
+            if success:
                 flash(f"Student '{name}' registered successfully! A welcome email was sent.", "success")
             else:
-                flash(f"Student '{name}' registered, but the email failed to send. Please check your SMTP configuration.", "error")
+                flash(f"Student '{name}' registered, but the email failed to send. Error: {err_msg}", "error")
 
             cursor.close(); conn.close()
             return redirect(url_for('admin_dashboard'))
