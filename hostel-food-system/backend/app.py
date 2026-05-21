@@ -2125,9 +2125,17 @@ def api_download_receipt(id):
     pdf.set_font("helvetica", 'B', 16)
     pdf.cell(50, 8, txt=receipt['receipt_number'])
     
-    # Format Date
-    dt_str = receipt['created_at'].strftime('%d %b %Y') if receipt['created_at'] else ''
-    tm_str = receipt['created_at'].strftime('%I:%M %p') if receipt['created_at'] else ''
+    # Format Date to IST
+    dt_str = ''
+    tm_str = ''
+    if receipt['created_at']:
+        import datetime as dt
+        # DB stores naive UTC, convert to aware UTC then to IST
+        utc_dt = receipt['created_at'].replace(tzinfo=dt.timezone.utc)
+        ist_tz = dt.timezone(dt.timedelta(hours=5, minutes=30))
+        ist_dt = utc_dt.astimezone(ist_tz)
+        dt_str = ist_dt.strftime('%d %b %Y')
+        tm_str = ist_dt.strftime('%I:%M %p IST')
     
     pdf.set_xy(150, 65)
     pdf.set_text_color(50, 50, 50)
