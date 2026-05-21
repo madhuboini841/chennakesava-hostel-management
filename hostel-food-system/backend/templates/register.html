@@ -63,7 +63,7 @@
               <div class="card-title">👨‍🎓 Student Registration Form</div>
             </div>
             <div class="card-body">
-              <form method="POST" action="/register">
+              <form method="POST" action="/register" onsubmit="const btn = this.querySelector('button[type=submit]'); btn.disabled = true; btn.innerHTML = 'Registering...';">
                 <div class="form-row">
                   <div class="form-group">
                     <label>Full Name *</label>
