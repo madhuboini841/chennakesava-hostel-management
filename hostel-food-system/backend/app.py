@@ -2513,6 +2513,32 @@ def api_student_receipts():
     return jsonify(receipts)
 
 # ============================================================
+# DIAGNOSTIC ROUTE FOR EMAIL BUG
+# ============================================================
+@app.route('/debug/email/<path:email>')
+def debug_email(email):
+    conn = get_db()
+    if not conn: return "Failed to connect to DB"
+    cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    result = {'email_searched': email}
+    try:
+        cursor.execute("SELECT id, name, email, roll_number FROM students WHERE email = %s", (email,))
+        result['students'] = cursor.fetchall()
+        
+        cursor.execute("SELECT EXISTS(SELECT FROM information_schema.tables WHERE table_name='users')")
+        if cursor.fetchone()['exists']:
+            cursor.execute("SELECT id, email FROM users WHERE email = %s", (email,))
+            result['users'] = cursor.fetchall()
+            
+        cursor.execute("SELECT id, name, email FROM admins WHERE email = %s", (email,))
+        result['admins'] = cursor.fetchall()
+        return jsonify(result)
+    except Exception as e:
+        return str(e)
+    finally:
+        cursor.close(); conn.close()
+
+# ============================================================
 # RUN THE APP
 # ============================================================
 if __name__ == '__main__':
