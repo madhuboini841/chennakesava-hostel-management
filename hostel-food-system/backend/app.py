@@ -879,9 +879,9 @@ def student_food_optout():
     reason = request.form.get('reason', '')
     
     # Checkboxes only arrive if checked
-    skip_b = 1 if request.form.get('skip_breakfast') else 0
-    skip_l = 1 if request.form.get('skip_lunch') else 0
-    skip_d = 1 if request.form.get('skip_dinner') else 0
+    skip_b = True if request.form.get('skip_breakfast') else False
+    skip_l = True if request.form.get('skip_lunch') else False
+    skip_d = True if request.form.get('skip_dinner') else False
     
     today = date.today().isoformat()
     
@@ -899,9 +899,9 @@ def student_food_optout():
     cursor.execute("SELECT * FROM food_optouts WHERE student_id = %s AND date = %s", (session['user_id'], date_str))
     existing = cursor.fetchone()
     
-    old_b = existing['breakfast'] if existing else 0
-    old_l = existing['lunch'] if existing else 0
-    old_d = existing['dinner'] if existing else 0
+    old_b = existing['breakfast'] if existing else False
+    old_l = existing['lunch'] if existing else False
+    old_d = existing['dinner'] if existing else False
     
     # Deadline rules: Breakfast cutoff 7 AM, Lunch/Dinner cutoff 10 AM
     if skip_b != old_b and hour >= 7:
