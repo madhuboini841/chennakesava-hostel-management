@@ -281,24 +281,41 @@ def generate_temp_password(length=8):
     return ''.join(secrets.choice(alphabet) for i in range(length))
 
 def send_auth_email(to_email, subject, body_html):
-    resend.api_key = os.getenv('RESEND_API_KEY')
-    
-    sender_email = 'onboarding@resend.dev'
+    import smtplib
+    from email.mime.text import MIMEText
+    from email.mime.multipart import MIMEMultipart
 
-    params = {
-        "from": f"Chennakesava Hostel <{sender_email}>",
-        "to": [to_email],
-        "subject": subject,
-        "html": body_html,
-    }
+    smtp_host = os.getenv('SMTP_HOST', 'smtp-relay.brevo.com')
+    smtp_port = int(os.getenv('SMTP_PORT', '587'))
+    smtp_user = os.getenv('SMTP_USER')
+    smtp_pass = os.getenv('SMTP_PASS') # This is the Brevo SMTP API Key
+    
+    sender_email = os.getenv('SENDER_EMAIL', smtp_user)
+
+    if not smtp_user or not smtp_pass:
+        print("[SMTP ERROR] Missing SMTP_USER or SMTP_PASS environment variables.")
+        return False, "SMTP configuration missing"
+
+    msg = MIMEMultipart('alternative')
+    msg['From'] = f"Chennakesava Hostel <{sender_email}>"
+    msg['To'] = to_email
+    msg['Subject'] = subject
+    
+    # Attach HTML body
+    msg.attach(MIMEText(body_html, 'html'))
 
     try:
-        email = resend.Emails.send(params)
-        print(f"\n[RESEND API] Successfully sent email to {to_email}. ID: {email.get('id', 'unknown')}\n")
+        server = smtplib.SMTP(smtp_host, smtp_port)
+        server.starttls()
+        server.login(smtp_user, smtp_pass)
+        server.send_message(msg)
+        server.quit()
+        
+        print(f"\n[BREVO SMTP] Successfully sent email to {to_email}\n")
         return True, ""
     except Exception as e:
-        err = f"Resend API Error: {str(e)}"
-        print(f"\n[RESEND API ERROR] {err}\n")
+        err = f"SMTP Error: {str(e)}"
+        print(f"\n[BREVO SMTP ERROR] {err}\n")
         return False, err
 
 # ============================================================
