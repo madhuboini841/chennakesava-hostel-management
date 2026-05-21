@@ -264,10 +264,10 @@ def generate_temp_password(length=8):
     return ''.join(secrets.choice(alphabet) for i in range(length))
 
 def send_auth_email(to_email, subject, body_html):
-    smtp_server = os.getenv('SMTP_HOST', 'smtp.office365.com')
+    smtp_server = os.getenv('SMTP_HOST', 'smtp.gmail.com')
     smtp_port = int(os.getenv('SMTP_PORT', 587))
-    smtp_user = os.getenv('EMAIL_USER', 'chennakesavahostel@outlook.com')
-    smtp_pass = os.getenv('EMAIL_PASS', 'ucgnftwsfdbdgizk')
+    smtp_user = os.getenv('SMTP_EMAIL')
+    smtp_pass = os.getenv('SMTP_PASSWORD')
 
     msg = MIMEMultipart()
     msg['From'] = smtp_user
@@ -623,6 +623,23 @@ def register():
             cursor.close(); conn.close()
             return render_template('register.html', rooms=rooms)
 
+        # Check if email is already registered
+        cursor.execute("SELECT id FROM students WHERE email = %s", (email,))
+        if cursor.fetchone():
+            flash(f"Error: The email address '{email}' is already registered.", "error")
+            cursor.close()
+            conn.close()
+            return render_template('register.html', rooms=rooms)
+
+        # Check if roll number is already registered (if provided)
+        if roll_number:
+            cursor.execute("SELECT id FROM students WHERE roll_number = %s", (roll_number,))
+            if cursor.fetchone():
+                flash(f"Error: The roll number '{roll_number}' is already registered.", "error")
+                cursor.close()
+                conn.close()
+                return render_template('register.html', rooms=rooms)
+
         # Hash the password
         hashed = bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
 
@@ -724,20 +741,16 @@ course, year_of_study, room_id, dob, gender, aadhaar_number, blood_group, parent
 
         except mysql.connector.IntegrityError as e:
             conn.rollback()
-            error_msg = str(e).replace('\n', ' | ')
-            db_engine = "MySQL"
-            conn_host = DB_CONFIG.get('host', 'unknown')
-            conn_db = DB_CONFIG.get('database', 'unknown')
+            error_msg = str(e).lower()
+            if 'duplicate' in error_msg and 'email' in error_msg:
+                flash(f"Error: The email address '{email}' is already registered.", "error")
+            elif 'duplicate' in error_msg and 'roll_number' in error_msg:
+                flash(f"Error: The roll number '{roll_number}' is already registered.", "error")
+            else:
+                flash("Error: A student with this information already exists (Duplicate Entry).", "error")
             
-            trace_log = (
-                f"🚨 [TRACE DBG] ENGINE: {db_engine} | HOST: {conn_host} | DB: {conn_db} | "
-                f"ERRNO: {getattr(e, 'errno', 'N/A')} | SQLSTATE: {getattr(e, 'sqlstate', 'N/A')} | "
-                f"MSG: {error_msg}"
-            )
-                
-            flash(trace_log, "error")
-            # Also print to terminal for server logs
-            print(trace_log)
+            # Print to terminal for server logs
+            print(f"🚨 [DB ERROR] Integrity Error during registration: {e}")
 
     cursor.close()
     conn.close()
