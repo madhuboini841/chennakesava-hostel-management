@@ -283,7 +283,7 @@ def generate_temp_password(length=8):
 def send_auth_email(to_email, subject, body_html):
     resend.api_key = os.getenv('RESEND_API_KEY')
     
-    sender_email = os.getenv('SMTP_EMAIL', 'onboarding@resend.dev')
+    sender_email = 'onboarding@resend.dev'
 
     params = {
         "from": f"Chennakesava Hostel <{sender_email}>",
