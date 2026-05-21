@@ -1947,6 +1947,7 @@ def api_create_receipt():
         cursor.execute("""
             INSERT INTO fee_receipts (student_id, student_name, room_number, amount, payment_type, payment_mode, period, remarks)
             VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+            RETURNING id
         """, (student_id, student_name, room_number, amount, payment_type, payment_mode, period, remarks))
         
         new_id = cursor.fetchone()['id']
