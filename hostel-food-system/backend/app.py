@@ -1800,7 +1800,7 @@ def admin_finance():
     # Get all transactions for the filtered month
     cursor.execute("""
         SELECT * FROM transactions 
-        WHERE DATE_FORMAT(date, '%Y-%m') = %s 
+        WHERE TO_CHAR(date, 'YYYY-MM') = %s 
         ORDER BY date DESC, id DESC
     """, (month_filter,))
     transactions = cursor.fetchall()
@@ -1812,9 +1812,9 @@ def admin_finance():
     
     # Calculate for chart
     cursor.execute("""
-        SELECT DATE_FORMAT(date, '%%d') as day, type, SUM(amount) as total
+        SELECT TO_CHAR(date, 'DD') as day, type, SUM(amount) as total
         FROM transactions
-        WHERE DATE_FORMAT(date, '%%Y-%%m') = %s
+        WHERE TO_CHAR(date, 'YYYY-MM') = %s
         GROUP BY day, type
     """, (month_filter,))
     chart_data_raw = cursor.fetchall()
