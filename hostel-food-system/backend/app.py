@@ -18,9 +18,7 @@ from apscheduler.schedulers.background import BackgroundScheduler
 from flask_cors import CORS
 
 from dotenv import load_dotenv
-import smtplib
-from email.mime.text import MIMEText
-from email.mime.multipart import MIMEMultipart
+import resend
 import secrets
 import string
 import time
@@ -283,41 +281,24 @@ def generate_temp_password(length=8):
     return ''.join(secrets.choice(alphabet) for i in range(length))
 
 def send_auth_email(to_email, subject, body_html):
-    smtp_server = os.getenv('SMTP_HOST', 'smtp.gmail.com')
-    smtp_port = int(os.getenv('SMTP_PORT', 587))
-    smtp_user = os.getenv('SMTP_EMAIL')
-    smtp_pass = os.getenv('SMTP_PASSWORD')
+    resend.api_key = os.getenv('RESEND_API_KEY')
+    
+    sender_email = os.getenv('SMTP_EMAIL', 'onboarding@resend.dev')
 
-    msg = MIMEMultipart()
-    msg['From'] = smtp_user
-    msg['To'] = to_email
-    msg['Subject'] = subject
-    msg.attach(MIMEText(body_html, 'html'))
+    params = {
+        "from": f"Chennakesava Hostel <{sender_email}>",
+        "to": [to_email],
+        "subject": subject,
+        "html": body_html,
+    }
 
     try:
-        # Use SMTP_SSL on port 465 instead of STARTTLS on 587
-        if smtp_server == 'smtp.gmail.com' or smtp_port == 465:
-            server = smtplib.SMTP_SSL(smtp_server, 465, timeout=10)
-        else:
-            server = smtplib.SMTP(smtp_server, smtp_port, timeout=10)
-            server.starttls()
-        
-        server.set_debuglevel(1) # Enable debug output for the terminal logs
-        server.login(smtp_user, smtp_pass)
-        server.send_message(msg)
-        server.quit()
+        email = resend.Emails.send(params)
+        print(f"\n[RESEND API] Successfully sent email to {to_email}. ID: {email.get('id', 'unknown')}\n")
         return True, ""
-    except smtplib.SMTPAuthenticationError as e:
-        err = f"Auth Error: {e.smtp_error.decode('utf-8') if isinstance(e.smtp_error, bytes) else e.smtp_error}"
-        print(f"\n[SMTP AUTH ERROR] {err}\n")
-        return False, err
-    except TimeoutError:
-        err = f"Timeout Error: Connection to {smtp_server} timed out."
-        print(f"\n[SMTP TIMEOUT] {err}\n")
-        return False, err
     except Exception as e:
-        err = f"General Error: {e}"
-        print(f"\n[SMTP GENERAL ERROR] {err}\n")
+        err = f"Resend API Error: {str(e)}"
+        print(f"\n[RESEND API ERROR] {err}\n")
         return False, err
 
 # ============================================================
