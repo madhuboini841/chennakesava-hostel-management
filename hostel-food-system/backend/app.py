@@ -1553,7 +1553,17 @@ def delete_student(student_id):
                 (student['room_id'],)
             )
 
-        # Hard delete student (will cascade to fees, complaints, etc.)
+        # Manually delete dependent records first to ensure no ForeignKey violations
+        # (in case the production DB is missing ON DELETE CASCADE constraints)
+        dependent_tables = ['fees', 'complaints', 'student_activity_logs', 'sms_logs', 'food_optouts', 'fee_receipts']
+        for tbl in dependent_tables:
+            try:
+                # Use psycopg2.sql for safe table name injection if possible, but since these are hardcoded it's fine.
+                cursor.execute(f"DELETE FROM {tbl} WHERE student_id = %s", (student_id,))
+            except Exception as e:
+                pass # If table doesn't exist or other error, just continue
+
+        # Hard delete student
         cursor.execute("DELETE FROM students WHERE id = %s", (student_id,))
         affected = cursor.rowcount
         log.append(f"DELETE students WHERE id={student_id} -> Rows Affected: {affected}")
