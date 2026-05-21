@@ -5,8 +5,10 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Login — Chennakesava Boys Hostel</title>
   <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+  <!-- Boxicons for the eye icon and lock/mail icons -->
+  <link href='https://unpkg.com/boxicons@2.1.4/css/boxicons.min.css' rel='stylesheet'>
 </head>
-<body>
+<body class="login-body">
   <!-- Flash Messages -->
   {% with messages = get_flashed_messages(with_categories=true) %}
     {% if messages %}
@@ -21,60 +23,149 @@
     {% endif %}
   {% endwith %}
 
-  <div class="login-page">
-    <div class="login-box">
-      <!-- Logo -->
-      <div class="login-logo">
-        <div class="icon">🏠</div>
-        <h1>Chennakesava Boys Hostel</h1>
-        <p>Hostel Management System</p>
+  <div class="login-wrapper">
+    <!-- Left Side: Branding / Image -->
+    <div class="login-branding">
+      <div class="branding-overlay">
+        <div class="branding-header">
+          <div class="brand-logo">
+            <i class='bx bx-home-alt'></i> CBH
+          </div>
+          <span class="trusted-badge"><i class='bx bxs-star'></i> Trusted by Students</span>
+        </div>
+        
+        <div class="branding-text">
+          <h1>Welcome to<br><span>Chennakesava<br>Boys Hostel</span></h1>
+          <p>A complete Hostel Management System<br>for Students and Administrators.</p>
+        </div>
+
+        <div class="branding-features">
+          <div class="feature-item">
+            <div class="feature-icon"><i class='bx bxs-user-detail'></i></div>
+            <div class="feature-text">
+              <h4>Easy Management</h4>
+              <p>Manage student records, rooms and activities easily</p>
+            </div>
+          </div>
+          <div class="feature-item">
+            <div class="feature-icon"><i class='bx bxs-check-shield'></i></div>
+            <div class="feature-text">
+              <h4>Secure & Reliable</h4>
+              <p>Your data is safe with our secure system</p>
+            </div>
+          </div>
+          <div class="feature-item">
+            <div class="feature-icon"><i class='bx bx-bar-chart-alt-2'></i></div>
+            <div class="feature-text">
+              <h4>Smart Dashboard</h4>
+              <p>Get insights and manage everything in one place</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="branding-footer">
+          <i class='bx bx-check-shield'></i> &copy; 2026 Chennakesava Boys Hostel. All rights reserved.
+        </div>
       </div>
+    </div>
 
-      <!-- Role Selector Tabs -->
-      <div class="role-tabs">
-        <div class="role-tab active" id="tab-student" onclick="selectRole('student')">👨‍🎓 Student</div>
-        <div class="role-tab" id="tab-admin" onclick="selectRole('admin')">🔑 Admin</div>
+    <!-- Right Side: Login Form -->
+    <div class="login-form-container">
+      <div class="login-card">
+        
+        <div class="mobile-logo-circle">
+          <i class='bx bx-home-alt'></i>
+        </div>
+
+        <div class="login-header">
+          <h2>Sign in to your account</h2>
+          <p>Access your dashboard and manage easily</p>
+        </div>
+
+        <!-- Role Selector Tabs -->
+        <div class="role-tabs-modern">
+          <div class="role-tab-m active" id="tab-student" onclick="selectRole('student')">
+            <i class='bx bxs-graduation'></i> Student
+          </div>
+          <div class="role-tab-m" id="tab-admin" onclick="selectRole('admin')">
+            <i class='bx bx-user'></i> Admin
+          </div>
+        </div>
+
+        <form method="POST" action="/login">
+          <input type="hidden" name="role" id="roleInput" value="student">
+
+          <div class="form-group-icon">
+            <i class='bx bx-envelope input-icon'></i>
+            <input type="email" id="email" name="email" placeholder="Enter your email" required autofocus>
+          </div>
+
+          <div class="form-group-icon">
+            <i class='bx bx-lock-alt input-icon'></i>
+            <input type="password" id="password" name="password" placeholder="Enter your password" required>
+            <i class='bx bx-hide password-toggle' id="togglePassword" onclick="togglePasswordVisibility()"></i>
+          </div>
+
+          <div class="form-actions">
+            <label class="remember-me">
+              <input type="checkbox" name="remember"> <span class="checkbox-custom"></span> Remember me
+            </label>
+            <a href="{{ url_for('forgot_password') }}" class="forgot-link">Forgot Password?</a>
+          </div>
+
+          <button type="submit" class="btn-submit-modern">
+            Sign In <i class='bx bx-right-arrow-alt'></i>
+          </button>
+
+          <div class="secure-badge">
+            <div class="secure-icon"><i class='bx bx-check-shield'></i></div>
+            <div class="secure-text">
+              <strong>Secure & Protected</strong>
+              <span>Your data is safe with us</span>
+            </div>
+            <i class='bx bx-chevron-right chevron'></i>
+          </div>
+        </form>
+
+        <div class="mobile-footer">
+          &copy; 2026 Chennakesava Boys Hostel<br>All rights reserved
+        </div>
       </div>
-
-      <!-- Login Form -->
-      <form method="POST" action="/login">
-        <!-- Hidden role field, changed by JS -->
-        <input type="hidden" name="role" id="roleInput" value="student">
-
-        <div class="form-group">
-          <label for="email">Email Address</label>
-          <input type="email" id="email" name="email" placeholder="Enter your email" required autofocus>
-        </div>
-
-        <div class="form-group">
-          <label for="password">Password</label>
-          <input type="password" id="password" name="password" placeholder="Enter your password" required>
-        </div>
-
-        <button type="submit" class="btn btn-primary btn-full">
-          Sign In
-        </button>
-
-        <div style="text-align:center; margin-top: 15px;">
-          <a href="{{ url_for('forgot_password') }}" style="color: #4a90e2; text-decoration: none; font-size: 14px;">Forgot Password?</a>
-        </div>
-      </form>
-
     </div>
   </div>
 
   <script>
-    // Switch between student/admin role tabs
+    // Role Tab Switching
     function selectRole(role) {
       document.getElementById('roleInput').value = role;
       document.getElementById('tab-student').classList.toggle('active', role === 'student');
       document.getElementById('tab-admin').classList.toggle('active', role === 'admin');
     }
 
-    // Auto-hide flash messages after 4 seconds
+    // Password Visibility Toggle
+    function togglePasswordVisibility() {
+      const passwordInput = document.getElementById('password');
+      const toggleIcon = document.getElementById('togglePassword');
+      
+      if (passwordInput.type === 'password') {
+        passwordInput.type = 'text';
+        toggleIcon.classList.remove('bx-hide');
+        toggleIcon.classList.add('bx-show');
+      } else {
+        passwordInput.type = 'password';
+        toggleIcon.classList.remove('bx-show');
+        toggleIcon.classList.add('bx-hide');
+      }
+    }
+
+    // Auto-hide flash messages
     setTimeout(() => {
       const f = document.getElementById('flashMessages');
-      if (f) f.style.opacity = '0', f.style.transition = 'opacity 0.5s', setTimeout(() => f.remove(), 500);
+      if (f) {
+        f.style.opacity = '0';
+        f.style.transition = 'opacity 0.5s';
+        setTimeout(() => f.remove(), 500);
+      }
     }, 4000);
   </script>
 </body>
