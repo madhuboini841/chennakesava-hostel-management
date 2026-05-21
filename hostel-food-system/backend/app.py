@@ -287,13 +287,13 @@ def send_auth_email(to_email, subject, body_html):
 
     smtp_host = os.getenv('SMTP_HOST', 'smtp-relay.brevo.com')
     smtp_port = int(os.getenv('SMTP_PORT', '587'))
-    smtp_user = os.getenv('SMTP_USER')
-    smtp_pass = os.getenv('SMTP_PASS') # This is the Brevo SMTP API Key
+    smtp_user = os.getenv('SMTP_USER') or os.getenv('SMTP_EMAIL')
+    smtp_pass = os.getenv('SMTP_PASSWORD') or os.getenv('SMTP_PASS')
     
     sender_email = os.getenv('SENDER_EMAIL', smtp_user)
 
     if not smtp_user or not smtp_pass:
-        print("[SMTP ERROR] Missing SMTP_USER or SMTP_PASS environment variables.")
+        print(f"[SMTP ERROR] Missing SMTP authentication. USER set: {bool(smtp_user)}, PASS set: {bool(smtp_pass)}")
         return False, "SMTP configuration missing"
 
     msg = MIMEMultipart('alternative')
