@@ -443,16 +443,24 @@
                 <div class="card-title">🍽️ Today's Menu ({{ today_str }})</div>
               </div>
               <div class="card-body">
+                {% set ns = namespace(has_menus=false) %}
                 {% if todays_menu %}
                   <div style="display: flex; flex-direction: column; gap: 10px;">
                   {% for m in todays_menu %}
-                    {% if m['meal_type'] == student['meal_preference'] or not student['meal_preference'] %}
-                    <div style="padding: 12px; border-left: 4px solid var(--primary); background: #f9f9ff; border-radius: 4px;">
-                      <div style="font-weight: 800; font-size: 14px; text-transform: uppercase; margin-bottom: 4px;">{{ m['meal_slot'] }}</div>
-                      <div style="font-size: 13px; color: #555;">{{ m['items'] }}</div>
-                    </div>
+                    {% if not student.get('meal_preference') or m['meal_type'] == student.get('meal_preference') %}
+                      {% set ns.has_menus = true %}
+                      <div style="padding: 12px; border-left: 4px solid var(--primary); background: #f9f9ff; border-radius: 4px;">
+                        <div style="font-weight: 800; font-size: 14px; text-transform: uppercase; margin-bottom: 4px;">{{ m['meal_slot'] }} ({{ m['meal_type']|title }})</div>
+                        <div style="font-size: 13px; color: #555;">{{ m['items'] }}</div>
+                      </div>
                     {% endif %}
                   {% endfor %}
+                  {% if not ns.has_menus %}
+                    <div class="empty-state">
+                      <div class="icon">🍳</div>
+                      <p>Your {{ student.get('meal_preference', '')|title }} menu hasn't been posted yet.</p>
+                    </div>
+                  {% endif %}
                   </div>
                 {% else %}
                   <div class="empty-state">
