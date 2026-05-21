@@ -634,7 +634,19 @@ def register():
             cursor.close(); conn.close()
             return render_template('register.html', rooms=rooms)
 
-        # Check if email is already registered
+        # Fix Bug 2: Delete orphan records from users table if no linked student exists
+        cursor.execute("SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'users')")
+        if cursor.fetchone()['exists']:
+            # Only delete if it does NOT exist in students
+            cursor.execute("""
+                DELETE FROM users 
+                WHERE email = %s 
+                AND NOT EXISTS (SELECT 1 FROM students WHERE email = %s)
+            """, (email, email))
+            # DO NOT commit here yet; we can just rely on the main transaction.
+            # But wait, we are in a transaction. It will commit at the end.
+
+        # Check if email is already registered in students
         cursor.execute("SELECT id FROM students WHERE email = %s", (email,))
         if cursor.fetchone():
             flash(f"Error: The email address '{email}' is already registered.", "error")
@@ -742,6 +754,10 @@ course, year_of_study, room_id, dob, gender, aadhaar_number, blood_group, parent
                 </div>
             </div>
             """
+            
+            # Commit the transaction so the student is saved!
+            conn.commit()
+            
             success, err_msg = send_auth_email(email, "Welcome to Chennakesava Boys Hostel!", body)
             if success:
                 flash(f"Student '{name}' registered successfully! A welcome email was sent.", "success")
