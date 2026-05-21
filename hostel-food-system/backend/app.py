@@ -788,9 +788,30 @@ def student_dashboard():
 
     # Get latest fee records
     cursor.execute("""
-        SELECT * FROM fees WHERE student_id = %s ORDER BY year DESC, id DESC LIMIT 6
+        SELECT * FROM fees WHERE student_id = %s ORDER BY due_date DESC, id DESC LIMIT 6
     """, (session['user_id'],))
     fees = cursor.fetchall()
+
+    fee_alert = None
+    if fees:
+        latest_fee = fees[0]
+        today_date = date.today()
+        if latest_fee['status'] == 'paid':
+            fee_alert = {'type': 'paid', 'message': 'Fee paid successfully.'}
+            cursor.execute("SELECT receipt_number FROM fee_receipts WHERE student_id=%s ORDER BY created_at DESC LIMIT 1", (session['user_id'],))
+            r = cursor.fetchone()
+            if r and r['receipt_number']:
+                fee_alert['receipt_number'] = r['receipt_number']
+        elif latest_fee['due_date']:
+            days_diff = (latest_fee['due_date'] - today_date).days
+            if days_diff < 0:
+                fee_alert = {'type': 'overdue', 'message': f"Your fee is overdue by {abs(days_diff)} days!"}
+            elif days_diff == 0:
+                fee_alert = {'type': 'last_day', 'message': "Today is your last day to pay!"}
+            elif days_diff <= 2:
+                fee_alert = {'type': 'due_2_days', 'message': f"Urgent: Your fee is due in {days_diff} days!"}
+            elif days_diff <= 5:
+                fee_alert = {'type': 'due_5_days', 'message': f"Reminder: Your fee is due in {days_diff} days."}
 
     # Get student's fee receipts
     cursor.execute("""
@@ -859,6 +880,7 @@ def student_dashboard():
                            roommates=roommates,
                            activity_logs=activity_logs,
                            fees=fees,
+                           fee_alert=fee_alert,
                            receipts=receipts,
                            complaints=complaints,
                            notices=notices,
@@ -1023,14 +1045,35 @@ def admin_dashboard():
     """)
     notices = cursor.fetchall()
 
-    # Recent fees
+    # Latest fee per active student
     cursor.execute("""
-        SELECT f.*, s.name as student_name FROM fees f
-        JOIN students s ON f.student_id = s.id
-        ORDER BY f.created_at DESC LIMIT 20
+        SELECT DISTINCT ON (s.id) 
+            f.*, s.name as student_name 
+        FROM students s
+        JOIN fees f ON f.student_id = s.id
+        WHERE s.status = 'active'
+        ORDER BY s.id, f.due_date DESC
     """)
     fees = cursor.fetchall()
     
+    fee_metrics = {'total': len(fees), 'due_soon': 0, 'overdue': 0, 'paid': 0}
+    today_date = date.today()
+    
+    for f in fees:
+        if f['status'] == 'paid':
+            fee_metrics['paid'] += 1
+            f['alert_type'] = 'paid'
+        elif f['due_date']:
+            days_diff = (f['due_date'] - today_date).days
+            if days_diff < 0:
+                fee_metrics['overdue'] += 1
+                f['alert_type'] = 'overdue'
+            elif days_diff <= 5:
+                fee_metrics['due_soon'] += 1
+                f['alert_type'] = 'due_soon'
+            else:
+                f['alert_type'] = 'pending'
+
     # SMS Logs
     cursor.execute("""
         SELECT l.*, s.name as student_name FROM sms_logs l
@@ -1111,6 +1154,7 @@ def admin_dashboard():
                            complaints=complaints,
                            notices=notices,
                            fees=fees,
+                           fee_metrics=fee_metrics,
                            sms_logs=sms_logs,
                            fast2sms_api_key=fast2sms_api_key,
                            todays_menu=todays_menu,

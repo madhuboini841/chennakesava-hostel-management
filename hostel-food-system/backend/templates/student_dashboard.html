@@ -76,7 +76,6 @@
         <!-- ===== TAB: PROFILE ===== -->
         <div id="tab-profile" class="tab-section">
           
-        <!-- Welcome Banner -->
         <div class="welcome-banner">
           <div>
             <h2>Hello, {{ student.name }}! 👋</h2>
@@ -92,6 +91,26 @@
             🏫 {{ student.roll_number or 'N/A' }}
           </div>
         </div>
+
+        {% if fee_alert %}
+        <div class="card" style="margin-bottom: 20px; border-left: 4px solid {% if fee_alert.type == 'overdue' or fee_alert.type == 'last_day' %}var(--danger){% elif fee_alert.type == 'due_2_days' or fee_alert.type == 'due_5_days' %}var(--warning){% else %}var(--success){% endif %}; background: {% if fee_alert.type == 'overdue' or fee_alert.type == 'last_day' %}#fee2e2{% elif fee_alert.type == 'due_2_days' or fee_alert.type == 'due_5_days' %}#fef3c7{% else %}#d1fae5{% endif %};">
+          <div class="card-body" style="padding: 15px 20px; display: flex; align-items: center; gap: 15px;">
+            <div style="font-size: 24px;">
+              {% if fee_alert.type == 'overdue' or fee_alert.type == 'last_day' %}⚠️
+              {% elif fee_alert.type == 'due_2_days' or fee_alert.type == 'due_5_days' %}🔔
+              {% else %}✅{% endif %}
+            </div>
+            <div>
+              <div style="font-weight: 700; font-size: 15px; color: {% if fee_alert.type == 'overdue' or fee_alert.type == 'last_day' %}#991b1b{% elif fee_alert.type == 'due_2_days' or fee_alert.type == 'due_5_days' %}#92400e{% else %}#065f46{% endif %};">
+                {{ fee_alert.message }}
+              </div>
+              {% if fee_alert.receipt_number %}
+              <div style="font-size: 13px; color: #065f46; margin-top: 4px;">Receipt No: {{ fee_alert.receipt_number }}</div>
+              {% endif %}
+            </div>
+          </div>
+        </div>
+        {% endif %}
 
         <div class="two-col">
             <!-- Personal Info Card -->

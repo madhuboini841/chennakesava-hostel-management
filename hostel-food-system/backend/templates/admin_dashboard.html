@@ -378,35 +378,75 @@
 
         <!-- ===== SECTION: FEES ===== -->
         <div id="section-fees" class="dashboard-section" style="display:none">
+          
+          <!-- Fee Alerts Dashboard -->
+          <div class="stats-grid" style="margin-bottom: 20px;">
+            <div class="stat-card">
+              <div class="stat-icon" style="background:var(--primary-light);color:var(--primary)">👥</div>
+              <div class="stat-info">
+                <h3>{{ fee_metrics.total }}</h3>
+                <p>Active Students</p>
+              </div>
+            </div>
+            <div class="stat-card" style="cursor:pointer" onclick="filterFees('due_soon')">
+              <div class="stat-icon" style="background:#fef3c7;color:#92400e">⏳</div>
+              <div class="stat-info">
+                <h3>{{ fee_metrics.due_soon }}</h3>
+                <p>Due Soon</p>
+              </div>
+            </div>
+            <div class="stat-card" style="cursor:pointer" onclick="filterFees('overdue')">
+              <div class="stat-icon" style="background:#fee2e2;color:#991b1b">⚠️</div>
+              <div class="stat-info">
+                <h3>{{ fee_metrics.overdue }}</h3>
+                <p>Overdue</p>
+              </div>
+            </div>
+            <div class="stat-card" style="cursor:pointer" onclick="filterFees('paid')">
+              <div class="stat-icon" style="background:#d1fae5;color:#065f46">✅</div>
+              <div class="stat-info">
+                <h3>{{ fee_metrics.paid }}</h3>
+                <p>Paid</p>
+              </div>
+            </div>
+          </div>
+
           <div class="card">
-            <div class="card-header">
-              <div class="card-title">💰 Fee Management</div>
+            <div class="card-header" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
+              <div class="card-title">💰 Current Fee Status</div>
+              <div style="display:flex; gap:8px;">
+                <button class="btn btn-sm" style="background:var(--bg-light);border:1px solid #ddd;color:#333" onclick="filterFees('all')">All</button>
+                <button class="btn btn-sm" style="background:#fef3c7;border:1px solid #fcd34d;color:#92400e" onclick="filterFees('due_soon')">Due Soon</button>
+                <button class="btn btn-sm" style="background:#fee2e2;border:1px solid #fca5a5;color:#991b1b" onclick="filterFees('overdue')">Overdue</button>
+                <button class="btn btn-sm" style="background:#d1fae5;border:1px solid #6ee7b7;color:#065f46" onclick="filterFees('paid')">Paid</button>
+              </div>
             </div>
             <div class="table-wrap">
               <table>
                 <thead>
                   <tr><th>#</th><th>Student</th><th>Month</th><th>Amount</th><th>Due Date</th><th>Status</th><th>Paid On</th><th>Update</th></tr>
                 </thead>
-                <tbody>
+                <tbody id="fees-tbody">
                   {% for f in fees %}
-                  <tr>
+                  <tr class="fee-row" data-alert-type="{{ f.alert_type }}">
                     <td>{{ loop.index }}</td>
                     <td><strong>{{ f.student_name }}</strong></td>
                     <td>{{ f.month }}</td>
                     <td>₹{{ "%.0f"|format(f.amount) }}</td>
                     <td>
-                      <div>{{ f.due_date }}</div>
+                      <div style="{% if f.alert_type == 'overdue' %}color:var(--danger);font-weight:bold{% elif f.alert_type == 'due_soon' %}color:var(--warning);font-weight:bold{% endif %}">{{ f.due_date }}</div>
                       <button class="btn btn-sm" style="padding:2px 4px;font-size:10px" onclick="openEditFeeDetails({{ f.id }}, {{ f.amount }}, '{{ f.due_date }}')">📅 Edit</button>
                     </td>
                     <td>
-                      {% if f.status == 'paid' %}<span class="badge badge-success">✅ Paid</span>
-                      {% elif f.status == 'overdue' %}<span class="badge badge-danger">⚠️ Overdue</span>
-                      {% else %}<span class="badge badge-warning">⏳ Pending</span>{% endif %}
+                      {% if f.alert_type == 'paid' %}<span class="badge badge-success">✅ Paid</span>
+                      {% elif f.alert_type == 'overdue' %}<span class="badge badge-danger">⚠️ Overdue</span>
+                      {% elif f.alert_type == 'due_soon' %}<span class="badge badge-warning">⏳ Due Soon</span>
+                      {% else %}<span class="badge" style="background:#e5e7eb;color:#374151">Pending</span>{% endif %}
                     </td>
                     <td>{{ f.payment_date or '—' }}</td>
                     <td>
                       <div style="display:flex;gap:4px">
-                        <form method="POST" action="/fees/update/{{ f.id }}" class="action-form">
+                        <form method="POST" action="/fees/update/{{ f.id }}" class="action-form" style="display:flex;gap:4px">
                           <select name="status" style="padding:4px 8px;border-radius:4px;border:1px solid #ddd;font-size:12px">
                             <option value="pending" {% if f.status=='pending' %}selected{% endif %}>Pending</option>
                             <option value="paid" {% if f.status=='paid' %}selected{% endif %}>Paid</option>
@@ -1075,6 +1115,17 @@
   </div>
 
   <script>
+    function filterFees(type) {
+      const rows = document.querySelectorAll('#fees-tbody .fee-row');
+      rows.forEach(row => {
+        if (type === 'all' || row.dataset.alertType === type) {
+          row.style.display = '';
+        } else {
+          row.style.display = 'none';
+        }
+      });
+    }
+
     function toggleSidebar() {
       document.querySelector('.sidebar').classList.toggle('open');
       const overlay = document.querySelector('.sidebar-overlay');
