@@ -295,12 +295,11 @@ def send_auth_email(to_email, subject, body_html):
     msg.attach(MIMEText(body_html, 'html'))
 
     try:
-        # Use SMTP_SSL on port 465 instead of STARTTLS on 587 (better for cloud environments like Render)
-        # source_address=('0.0.0.0', 0) explicitly forces IPv4 to avoid '[Errno 101] Network is unreachable' on IPv6 Render hosts
+        # Use SMTP_SSL on port 465 instead of STARTTLS on 587
         if smtp_server == 'smtp.gmail.com' or smtp_port == 465:
-            server = smtplib.SMTP_SSL(smtp_server, 465, timeout=5, source_address=('0.0.0.0', 0))
+            server = smtplib.SMTP_SSL(smtp_server, 465, timeout=10)
         else:
-            server = smtplib.SMTP(smtp_server, smtp_port, timeout=5, source_address=('0.0.0.0', 0))
+            server = smtplib.SMTP(smtp_server, smtp_port, timeout=10)
             server.starttls()
         
         server.set_debuglevel(1) # Enable debug output for the terminal logs
