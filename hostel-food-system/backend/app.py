@@ -281,50 +281,46 @@ def generate_temp_password(length=8):
     return ''.join(secrets.choice(alphabet) for i in range(length))
 
 def send_auth_email(to_email, subject, body_html):
-    import smtplib
-    from email.mime.text import MIMEText
-    from email.mime.multipart import MIMEMultipart
+    import requests
 
-    smtp_host = os.getenv('SMTP_HOST', 'smtp-relay.brevo.com')
-    smtp_port = int(os.getenv('SMTP_PORT', '587'))
-    smtp_user = os.getenv('SMTP_USER') or os.getenv('SMTP_EMAIL') or os.getenv('EMAIL_USER')
-    smtp_pass = os.getenv('SMTP_PASSWORD') or os.getenv('SMTP_PASS') or os.getenv('EMAIL_PASS')
-    
-    sender_email = os.getenv('SENDER_EMAIL', smtp_user)
+    api_key = os.getenv('BREVO_API_KEY')
+    # Fallback to SMTP password if they used the API key as the SMTP password
+    if not api_key:
+        api_key = os.getenv('SMTP_PASSWORD') or os.getenv('SMTP_PASS') or os.getenv('EMAIL_PASS')
 
-    print(f"[BREVO SMTP DEBUG] Attempting to send email via {smtp_host}:{smtp_port}. User set: {bool(smtp_user)}", flush=True)
+    sender_email = os.getenv('SENDER_EMAIL') or os.getenv('SMTP_USER') or os.getenv('SMTP_EMAIL') or os.getenv('EMAIL_USER') or "admin@chennakesavahostel.com"
 
-    if not smtp_user or not smtp_pass:
-        print(f"[SMTP ERROR] Missing SMTP authentication. USER set: {bool(smtp_user)}, PASS set: {bool(smtp_pass)}", flush=True)
-        return False, "SMTP configuration missing"
+    print(f"[BREVO REST DEBUG] Attempting to send email via Brevo REST API. API Key present: {bool(api_key)}", flush=True)
 
-    msg = MIMEMultipart('alternative')
-    msg['From'] = f"Chennakesava Hostel <{sender_email}>"
-    msg['To'] = to_email
-    msg['Subject'] = subject
-    
-    # Attach HTML body
-    msg.attach(MIMEText(body_html, 'html'))
+    if not api_key:
+        print("[BREVO REST ERROR] Missing BREVO_API_KEY.", flush=True)
+        return False, "BREVO_API_KEY missing"
+
+    url = "https://api.brevo.com/v3/smtp/email"
+    headers = {
+        "accept": "application/json",
+        "content-type": "application/json",
+        "api-key": api_key
+    }
+    payload = {
+        "sender": {"name": "Chennakesava Hostel", "email": sender_email},
+        "to": [{"email": to_email}],
+        "subject": subject,
+        "htmlContent": body_html
+    }
 
     try:
-        # Prevent 502 Gateway Timeout by setting a timeout and handling SSL port properly
-        if smtp_port == 465:
-            server = smtplib.SMTP_SSL(smtp_host, smtp_port, timeout=10)
-        else:
-            server = smtplib.SMTP(smtp_host, smtp_port, timeout=10)
-            server.starttls()
-            
-        server.login(smtp_user, smtp_pass)
-        server.send_message(msg)
-        server.quit()
-        
-        print(f"\n[BREVO SMTP] Successfully sent email to {to_email}\n", flush=True)
+        response = requests.post(url, json=payload, headers=headers, timeout=10)
+        response.raise_for_status()
+        print(f"\n[BREVO REST] Successfully sent email to {to_email}\n", flush=True)
         return True, ""
     except Exception as e:
         import traceback
-        err = f"SMTP Error: {str(e)}"
+        err = f"Brevo API Error: {str(e)}"
+        if hasattr(e, 'response') and getattr(e, 'response') is not None:
+            err += f" | Response: {e.response.text}"
         traceback.print_exc()
-        print(f"\n[BREVO SMTP ERROR] {err}\n", flush=True)
+        print(f"\n[BREVO REST ERROR] {err}\n", flush=True)
         return False, err
 
 # ============================================================
