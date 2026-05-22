@@ -305,8 +305,13 @@ def send_auth_email(to_email, subject, body_html):
     msg.attach(MIMEText(body_html, 'html'))
 
     try:
-        server = smtplib.SMTP(smtp_host, smtp_port)
-        server.starttls()
+        # Prevent 502 Gateway Timeout by setting a timeout and handling SSL port properly
+        if smtp_port == 465:
+            server = smtplib.SMTP_SSL(smtp_host, smtp_port, timeout=10)
+        else:
+            server = smtplib.SMTP(smtp_host, smtp_port, timeout=10)
+            server.starttls()
+            
         server.login(smtp_user, smtp_pass)
         server.send_message(msg)
         server.quit()
@@ -652,7 +657,7 @@ def register():
             return render_template('register.html', rooms=rooms)
 
         # Fix Bug 2: Delete orphan records from users table if no linked student exists
-        cursor.execute("SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'users')")
+        cursor.execute("SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'users')")
         if cursor.fetchone()['exists']:
             # Only delete if it does NOT exist in students
             cursor.execute("""
@@ -660,8 +665,7 @@ def register():
                 WHERE email = %s 
                 AND NOT EXISTS (SELECT 1 FROM students WHERE email = %s)
             """, (email, email))
-            # DO NOT commit here yet; we can just rely on the main transaction.
-            # But wait, we are in a transaction. It will commit at the end.
+            # DO NOT commit here yet; we can rely on the main transaction.
 
         # Check if email is already registered in students
         cursor.execute("SELECT id FROM students WHERE email = %s", (email,))
@@ -775,11 +779,16 @@ course, year_of_study, room_id, dob, gender, aadhaar_number, blood_group, parent
             # Commit the transaction so the student is saved!
             conn.commit()
             
-            success, err_msg = send_auth_email(email, "Welcome to Chennakesava Boys Hostel!", body)
-            if success:
-                flash(f"Student '{name}' registered successfully! A welcome email was sent.", "success")
-            else:
-                flash(f"Student '{name}' registered, but the email failed to send. Error: {err_msg}", "error")
+            import threading
+            # Send welcome email asynchronously to prevent slow registration response
+            email_thread = threading.Thread(
+                target=send_auth_email, 
+                args=(email, "Welcome to Chennakesava Boys Hostel!", body)
+            )
+            email_thread.daemon = True
+            email_thread.start()
+            
+            flash(f"Student '{name}' registered successfully! A welcome email is being sent in the background.", "success")
 
             cursor.close(); conn.close()
             return redirect(url_for('admin_dashboard'))
@@ -1556,7 +1565,6 @@ def delete_student(student_id):
 
     conn = get_db()
     cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
-    log = []
 
     try:
         # Free up the room
@@ -1570,9 +1578,15 @@ def delete_student(student_id):
                 (student['room_id'],)
             )
 
+        # First delete receipts tied to this student's fees to avoid FK violations
+        try:
+            cursor.execute("DELETE FROM receipts WHERE fee_id IN (SELECT id FROM fees WHERE student_id = %s)", (student_id,))
+        except Exception:
+            pass
+            
         # Manually delete dependent records first to ensure no ForeignKey violations
         # (in case the production DB is missing ON DELETE CASCADE constraints)
-        dependent_tables = ['fees', 'complaints', 'student_activity_logs', 'sms_logs', 'food_optouts', 'fee_receipts']
+        dependent_tables = ['fee_receipts', 'fees', 'complaints', 'student_activity_logs', 'sms_logs', 'food_optouts']
         for tbl in dependent_tables:
             try:
                 # Use psycopg2.sql for safe table name injection if possible, but since these are hardcoded it's fine.
@@ -1582,32 +1596,23 @@ def delete_student(student_id):
 
         # Hard delete student
         cursor.execute("DELETE FROM students WHERE id = %s", (student_id,))
-        affected = cursor.rowcount
-        log.append(f"DELETE students WHERE id={student_id} -> Rows Affected: {affected}")
         
         # Hard delete from users table (if used by external auth/PHP app)
         if student_email:
             cursor.execute("""
                 SELECT EXISTS (
-                    SELECT FROM information_schema.tables 
+                    SELECT 1 FROM information_schema.tables 
                     WHERE table_schema = 'public' AND table_name = 'users'
                 );
             """)
             if cursor.fetchone()['exists']:
                 cursor.execute("DELETE FROM users WHERE email = %s", (student_email,))
-                log.append(f"DELETE users WHERE email={student_email} -> Rows Affected: {cursor.rowcount}")
-
-        # Check specifically for madhuboini841@gmail.com
-        cursor.execute("SELECT id FROM students WHERE email = 'madhuboini841@gmail.com'")
-        madhu_exists = cursor.fetchone()
-        log.append(f"madhuboini841@gmail.com STILL IN DB: {'YES (ID '+str(madhu_exists['id'])+')' if madhu_exists else 'NO'}")
 
         conn.commit()
-        log.append("COMMIT SUCCESSFUL")
-        flash(f"✅ [TRACE DBG] " + " | ".join(log), "success")
+        flash("Student completely removed successfully.", "success")
     except Exception as e:
         conn.rollback()
-        flash(f"❌ [TRACE DBG] DELETE FAILED: {str(e)}", "error")
+        flash("Failed to delete student. Please try again.", "error")
     finally:
         cursor.close()
         conn.close()
