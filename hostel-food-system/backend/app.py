@@ -1743,16 +1743,23 @@ def send_manual_sms():
             
     return redirect(url_for('admin_dashboard'))
 
-@app.route('/admin/sms/settings', methods=['POST'])
+@app.route('/admin/sms/settings', methods=['GET', 'POST'])
 def save_sms_settings():
     if not is_admin():
         return jsonify({'error': 'Unauthorized'}), 401
+        
+    if request.method == 'GET':
+        return redirect(url_for('admin_dashboard') + '#sms')
         
     api_key = request.form.get('fast2sms_api_key', '').strip()
     
     conn = get_db()
     cursor = conn.cursor()
-    cursor.execute("INSERT INTO settings (setting_key, setting_value) VALUES ('fast2sms_api_key', %s) ON DUPLICATE KEY UPDATE setting_value=%s", (api_key, api_key))
+    
+    # Safe cross-database upsert (Postgres doesn't support ON DUPLICATE KEY UPDATE)
+    cursor.execute("DELETE FROM settings WHERE setting_key = 'fast2sms_api_key'")
+    cursor.execute("INSERT INTO settings (setting_key, setting_value) VALUES ('fast2sms_api_key', %s)", (api_key,))
+    
     conn.commit()
     cursor.close(); conn.close()
     
