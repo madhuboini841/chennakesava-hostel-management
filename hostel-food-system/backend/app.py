@@ -287,13 +287,15 @@ def send_auth_email(to_email, subject, body_html):
 
     smtp_host = os.getenv('SMTP_HOST', 'smtp-relay.brevo.com')
     smtp_port = int(os.getenv('SMTP_PORT', '587'))
-    smtp_user = os.getenv('SMTP_USER') or os.getenv('SMTP_EMAIL')
-    smtp_pass = os.getenv('SMTP_PASSWORD') or os.getenv('SMTP_PASS')
+    smtp_user = os.getenv('SMTP_USER') or os.getenv('SMTP_EMAIL') or os.getenv('EMAIL_USER')
+    smtp_pass = os.getenv('SMTP_PASSWORD') or os.getenv('SMTP_PASS') or os.getenv('EMAIL_PASS')
     
     sender_email = os.getenv('SENDER_EMAIL', smtp_user)
 
+    print(f"[BREVO SMTP DEBUG] Attempting to send email via {smtp_host}:{smtp_port}. User set: {bool(smtp_user)}", flush=True)
+
     if not smtp_user or not smtp_pass:
-        print(f"[SMTP ERROR] Missing SMTP authentication. USER set: {bool(smtp_user)}, PASS set: {bool(smtp_pass)}")
+        print(f"[SMTP ERROR] Missing SMTP authentication. USER set: {bool(smtp_user)}, PASS set: {bool(smtp_pass)}", flush=True)
         return False, "SMTP configuration missing"
 
     msg = MIMEMultipart('alternative')
@@ -316,11 +318,13 @@ def send_auth_email(to_email, subject, body_html):
         server.send_message(msg)
         server.quit()
         
-        print(f"\n[BREVO SMTP] Successfully sent email to {to_email}\n")
+        print(f"\n[BREVO SMTP] Successfully sent email to {to_email}\n", flush=True)
         return True, ""
     except Exception as e:
+        import traceback
         err = f"SMTP Error: {str(e)}"
-        print(f"\n[BREVO SMTP ERROR] {err}\n")
+        traceback.print_exc()
+        print(f"\n[BREVO SMTP ERROR] {err}\n", flush=True)
         return False, err
 
 # ============================================================
