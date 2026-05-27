@@ -248,56 +248,108 @@
                 </div>
               </div>
 
-              <!-- Desktop Table -->
-              <div class="desktop-only table-wrap">
-                <table id="studentsTableDesktop">
-                  <thead>
-                    <tr>
-                      <th>#</th><th>Name</th><th>Roll No</th><th>Email</th><th>Contacts</th>
-                      <th>Course</th><th>Room</th><th>Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {% for s in students %}
-                    <tr class="student-row" data-name="{{ s.name|lower }}" data-roll="{{ s.roll_number|lower }}" data-email="{{ s.email|lower }}" data-course="{{ s.course|lower }}" data-room="{{ s.room_number or '' }}">
-                      <td>{{ loop.index }}</td>
-                      <td><strong>{{ s.name }}</strong></td>
-                      <td>{{ s.roll_number or '—' }}</td>
-                      <td style="font-size:12px">{{ s.email }}</td>
-                      <td>
-                        <div>📱 {{ s.mobile_number or '—' }}</div>
-                        <div style="font-size:11px;color:#777">Parent: {{ s.parent_number or '—' }}</div>
-                        <button class="btn btn-sm" style="padding:2px 4px;font-size:10px" onclick="openEditMobile({{ s.id }}, '{{ s.mobile_number or '' }}', '{{ s.parent_number or '' }}')">✏️ Edit Contacts</button>
-                      </td>
-                      <td>{{ s.course or '—' }}</td>
-                      <td>
-                        {% if s.room_number %}
-                          <span class="badge badge-success">{{ s.room_number }}</span>
-                        {% else %}
-                          <span class="badge badge-warning">Unassigned</span>
-                        {% endif %}
-                      </td>
-                      <td style="display:flex;gap:4px;flex-wrap:wrap;max-width:200px">
-                        <a href="/admin/student/{{ s.id }}" class="btn btn-sm btn-primary">👁️ Profile</a>
-                        <button class="btn btn-sm" style="background:#555;color:white" onclick="openEditStudentDetails({{ s.id }}, '{{ s.name|escape }}', '{{ s.email|escape }}', '{{ s.course|escape }}', '{{ s.year_of_study }}')">✏️ Edit Data</button>
-                        <button class="btn btn-sm btn-accent" onclick="openSendSMS({{ s.id }}, '{{ s.name|escape }}')">💬 SMS</button>
-                        <!-- Assign Room button -->
-                        <button class="btn btn-sm btn-info"
-                          onclick="openAssignRoom({{ s.id }}, '{{ s.name|escape }}', {{ s.room_id or 'null' }})">
-                          🛏️ Assign
-                        </button>
-                        <!-- Delete student -->
-                        <form method="POST" action="/students/delete/{{ s.id }}" class="action-form"
-                          onsubmit="return confirm('Remove {{ s.name|escape }} from hostel?')">
-                          <button type="submit" class="btn btn-sm btn-danger">🗑️</button>
-                        </form>
-                      </td>
-                    </tr>
-                    {% else %}
-                    <tr class="empty-row"><td colspan="8" style="text-align:center;padding:30px;color:#999">No students registered yet.</td></tr>
-                    {% endfor %}
-                  </tbody>
-                </table>
+              <!-- Desktop Split View -->
+              <div class="desktop-only student-split-view">
+                
+                <!-- Left Pane: Table -->
+                <div class="student-list-pane">
+                  <table class="modern-table" id="studentsTableDesktop">
+                    <thead>
+                      <tr>
+                        <th>Student Name</th>
+                        <th>Roll No</th>
+                        <th>Course</th>
+                        <th>Status</th>
+                        <th style="text-align: right;">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {% for s in students %}
+                      <tr class="student-row desktop-student-row" 
+                          data-id="{{ s.id }}"
+                          data-name="{{ s.name|lower }}" 
+                          data-roll="{{ s.roll_number|lower }}" 
+                          data-email="{{ s.email|lower }}" 
+                          data-course="{{ s.course|lower }}" 
+                          data-room="{{ s.room_number or '' }}"
+                          onclick="openDesktopPreview({{ s.id }}, '{{ s.name|escape }}', '{{ s.roll_number or 'N/A' }}', '{{ s.mobile_number or 'N/A' }}', '{{ s.email|escape }}', '{{ s.course or 'N/A' }}', '{{ s.room_number or 'Unassigned' }}', {{ s.room_id or 'null' }}, '{{ s.year_of_study or '' }}')">
+                        
+                        <td>
+                          <div class="td-avatar-name">
+                            <div class="tbl-avatar">{{ s.name[0]|upper }}</div>
+                            <div>
+                              <div style="font-weight: 600; color: #0f172a;">{{ s.name }}</div>
+                              <div style="font-size: 12px; color: #64748b;">{{ s.email }}</div>
+                            </div>
+                          </div>
+                        </td>
+                        <td style="font-weight: 500;">{{ s.roll_number or '—' }}</td>
+                        <td>{{ s.course or '—' }}</td>
+                        <td>
+                          {% if s.room_number %}
+                            <span class="badge badge-success">Room: {{ s.room_number }}</span>
+                          {% else %}
+                            <span class="badge badge-warning">Unassigned</span>
+                          {% endif %}
+                        </td>
+                        <td style="text-align: right;" onclick="event.stopPropagation()">
+                          <div class="action-menu-wrap">
+                            <button class="action-menu-btn" onclick="toggleActionMenu({{ s.id }})">⋮</button>
+                            <div class="action-dropdown" id="action-dropdown-{{ s.id }}">
+                              <a href="/admin/student/{{ s.id }}">👁️ View Profile</a>
+                              <button onclick="openEditStudentDetails({{ s.id }}, '{{ s.name|escape }}', '{{ s.email|escape }}', '{{ s.course|escape }}', '{{ s.year_of_study }}')">✏️ Edit Data</button>
+                              <button onclick="openSendSMS({{ s.id }}, '{{ s.name|escape }}')">💬 Send SMS</button>
+                              <button onclick="openAssignRoom({{ s.id }}, '{{ s.name|escape }}', {{ s.room_id or 'null' }})">🛏️ Assign Room</button>
+                              <form method="POST" action="/students/delete/{{ s.id }}" style="margin:0;" onsubmit="return confirm('Remove {{ s.name|escape }} from hostel?')">
+                                <button type="submit" class="danger">🗑️ Delete</button>
+                              </form>
+                            </div>
+                          </div>
+                        </td>
+                      </tr>
+                      {% else %}
+                      <tr class="empty-row"><td colspan="5" style="text-align:center;padding:40px;color:#94a3b8;">No students registered yet.</td></tr>
+                      {% endfor %}
+                    </tbody>
+                  </table>
+                </div>
+
+                <!-- Right Pane: Preview Panel -->
+                <div class="student-preview-pane" id="desktopStudentPreview">
+                  <div class="preview-header">
+                    <button class="preview-close" onclick="closeDesktopPreview()">✕</button>
+                    <div class="preview-avatar" id="dPreviewAvatar">M</div>
+                    <div class="preview-name" id="dPreviewName">Student Name</div>
+                    <div class="preview-role" id="dPreviewSub">Roll No</div>
+                  </div>
+                  
+                  <div class="preview-body">
+                    <div class="preview-section">
+                      <div class="preview-label">Contact Information</div>
+                      <div class="preview-value" style="margin-bottom: 8px;">
+                        <i class="fas fa-phone-alt" style="color: #94a3b8; width: 20px;"></i> <span id="dPreviewPhone">--</span>
+                      </div>
+                      <div class="preview-value">
+                        <i class="fas fa-envelope" style="color: #94a3b8; width: 20px;"></i> <a href="#" id="dPreviewEmail">--</a>
+                      </div>
+                    </div>
+                    
+                    <div class="preview-section">
+                      <div class="preview-label">Hostel Status</div>
+                      <div class="preview-value">
+                        <i class="fas fa-bed" style="color: #94a3b8; width: 20px;"></i> <span id="dPreviewRoom">--</span>
+                      </div>
+                    </div>
+                    
+                    <div class="preview-actions">
+                      <a href="#" id="dPreviewProfileBtn" class="btn-preview btn-preview-primary">View Full Profile</a>
+                      <button id="dPreviewEditBtn" class="btn-preview btn-preview-outline">Edit Student Data</button>
+                      <button id="dPreviewSmsBtn" class="btn-preview btn-preview-outline">Send SMS</button>
+                      <button id="dPreviewAssignBtn" class="btn-preview btn-preview-outline">Assign Room</button>
+                    </div>
+                  </div>
+                </div>
+
               </div>
 
               <!-- Mobile Cards -->
@@ -1558,6 +1610,62 @@
 
       document.getElementById('mobileStudentDetailModal').classList.add('open');
     }
+
+    // ---- Desktop Split View Logic ----
+    function openDesktopPreview(id, name, roll, phone, email, course, roomStr, roomId, year) {
+      // Highlight row
+      document.querySelectorAll('.desktop-student-row').forEach(r => r.classList.remove('active-row'));
+      const activeRow = document.querySelector(`.desktop-student-row[data-id="${id}"]`);
+      if (activeRow) activeRow.classList.add('active-row');
+
+      // Populate data
+      document.getElementById('dPreviewName').innerText = name;
+      document.getElementById('dPreviewAvatar').innerText = name ? name.charAt(0).toUpperCase() : '?';
+      document.getElementById('dPreviewSub').innerText = roll + (course !== 'N/A' ? ' • ' + course : '');
+      document.getElementById('dPreviewPhone').innerText = phone;
+      document.getElementById('dPreviewEmail').innerText = email;
+      document.getElementById('dPreviewEmail').href = `mailto:${email}`;
+      document.getElementById('dPreviewRoom').innerText = roomStr;
+
+      // Update Buttons
+      document.getElementById('dPreviewProfileBtn').href = `/admin/student/${id}`;
+      
+      document.getElementById('dPreviewEditBtn').onclick = () => {
+        openEditStudentDetails(id, name, email, course, year);
+      };
+      
+      document.getElementById('dPreviewSmsBtn').onclick = () => {
+        openSendSMS(id, name);
+      };
+      
+      document.getElementById('dPreviewAssignBtn').onclick = () => {
+        openAssignRoom(id, name, roomId);
+      };
+
+      // Show panel
+      document.getElementById('desktopStudentPreview').classList.add('active');
+    }
+
+    function closeDesktopPreview() {
+      document.getElementById('desktopStudentPreview').classList.remove('active');
+      document.querySelectorAll('.desktop-student-row').forEach(r => r.classList.remove('active-row'));
+    }
+
+    // Dropdown toggle
+    function toggleActionMenu(id) {
+      // close all others
+      document.querySelectorAll('.action-dropdown').forEach(d => {
+        if (d.id !== `action-dropdown-${id}`) d.classList.remove('show');
+      });
+      document.getElementById(`action-dropdown-${id}`).classList.toggle('show');
+    }
+
+    // Close dropdowns if clicked outside
+    document.addEventListener('click', function(e) {
+      if (!e.target.closest('.action-menu-wrap')) {
+        document.querySelectorAll('.action-dropdown').forEach(d => d.classList.remove('show'));
+      }
+    });
   </script>
 </body>
 </html>
