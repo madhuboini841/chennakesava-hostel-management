@@ -1799,7 +1799,7 @@
       const form = document.getElementById('deleteStudentForm');
       if(form) {
         form.action = `/students/delete/${studentId}`;
-        openModal('deleteStudentConfirmModal');
+        document.getElementById('deleteStudentConfirmModal').classList.add('open');
       }
     }
 
