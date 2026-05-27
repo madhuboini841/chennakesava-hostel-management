@@ -194,7 +194,7 @@
                 </div>
                 <div class="fee-summary-row green">
                   <div>Collected</div>
-                  <div class="val" id="totalCollectedFees">₹{{ "{:,.0f}".format(total_collected_fees) }}</div>
+                  <div class="val" id="totalCollectedFees">₹0</div>
                 </div>
                 <div class="fee-summary-row amber">
                   <div>Pending</div>
@@ -202,7 +202,7 @@
                 </div>
                 <div class="fee-summary-row blue">
                   <div>Receipts</div>
-                  <div class="val" id="totalReceiptsCount">{{ total_receipts }} total</div>
+                  <div class="val" id="totalReceiptsCount">0 total</div>
                 </div>
               </div>
 
@@ -1293,9 +1293,17 @@
         fetch('/api/receipts/all')
         .then(res => res.json())
         .then(data => {
+            console.log("[Dashboard] Fetched receipts data:", data);
+            
             const tbody = document.getElementById('receiptsTableBody');
-            tbody.innerHTML = '';
+            if (tbody) tbody.innerHTML = '';
             let totalCollected = 0;
+
+            if (!Array.isArray(data)) {
+                console.error("[Dashboard] Error: Expected array of receipts, got:", typeof data);
+                if (tbody) tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:red;">Error loading receipts data.</td></tr>';
+                return;
+            }
 
             if(data.length === 0) {
                 tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;">No receipts found.</td></tr>';
@@ -1317,21 +1325,30 @@
                             <button onclick="deleteReceipt(${r.id})" class="btn btn-danger btn-sm">Delete</button>
                         </td>
                     `;
-                    tbody.appendChild(tr);
+                    if (tbody) tbody.appendChild(tr);
                 });
             }
+
+            console.log("[Dashboard] Final dynamically calculated Total Collected:", totalCollected);
 
             // Update Fee Summary dynamically
             const collectedElem = document.getElementById('totalCollectedFees');
             if (collectedElem) {
                 // Format output as Indian currency (₹) using toLocaleString
                 collectedElem.textContent = '₹' + totalCollected.toLocaleString('en-IN');
+                console.log("[Dashboard] Updated DOM element 'totalCollectedFees'");
+            } else {
+                console.warn("[Dashboard] Target DOM element 'totalCollectedFees' not found!");
             }
             
             const receiptsElem = document.getElementById('totalReceiptsCount');
             if (receiptsElem) {
                 receiptsElem.textContent = data.length + ' total';
+                console.log("[Dashboard] Updated DOM element 'totalReceiptsCount'");
             }
+        })
+        .catch(err => {
+            console.error("[Dashboard] Fetch error in loadReceipts:", err);
         });
     }
 
