@@ -45,7 +45,7 @@
         <ul>
           <li class="nav-item"><a href="#students" class="nav-link" onclick="showSection('students', this)"><span class="nav-icon">👨‍🎓</span> Students</a></li>
           <li class="nav-item"><a href="#rooms" class="nav-link" onclick="showSection('rooms', this)"><span class="nav-icon">🛏️</span> Rooms</a></li>
-          <li class="nav-item"><a href="#fees" class="nav-link" onclick="showSection('fees', this)"><span class="nav-icon">💰</span> Fees</a></li>
+          <li class="nav-item"><a href="#fees" class="nav-link" onclick="showSection('fees', this)"><span class="nav-icon">💰</span> Fees <span class="sidebar-badge" id="sidebarFeeBadge">0</span></a></li>
           <li class="nav-item"><a href="#complaints" class="nav-link" onclick="showSection('complaints', this)"><span class="nav-icon">📝</span> Complaints</a></li>
           <li class="nav-item"><a href="#notices" class="nav-link" onclick="showSection('notices', this)"><span class="nav-icon">📢</span> Notices</a></li>
           <li class="nav-item"><a href="#food" class="nav-link" onclick="showSection('food', this)"><span class="nav-icon">🍽️</span> Food Menu</a></li>
@@ -475,50 +475,85 @@
 
         <!-- ===== SECTION: FEES ===== -->
         <div id="section-fees" class="dashboard-section" style="display:none">
+          
+          <!-- Dynamic Fee Summary Cards -->
+          <div class="fee-stats-grid">
+            <div class="fee-stat-card">
+              <div class="fee-stat-icon blue">💰</div>
+              <div class="fee-stat-info">
+                <div class="value" id="feeStatTotalPending">0</div>
+                <div class="label">Total Pending</div>
+              </div>
+            </div>
+            <div class="fee-stat-card">
+              <div class="fee-stat-icon red" style="background:#fff1f2; color:#ef4444;">🚨</div>
+              <div class="fee-stat-info">
+                <div class="value" id="feeStatDueToday">0</div>
+                <div class="label">Due Today</div>
+              </div>
+            </div>
+            <div class="fee-stat-card">
+              <div class="fee-stat-icon amber">⏳</div>
+              <div class="fee-stat-info">
+                <div class="value" id="feeStatDueSoon">0</div>
+                <div class="label">Due This Week</div>
+              </div>
+            </div>
+            <div class="fee-stat-card">
+              <div class="fee-stat-icon red">⚠️</div>
+              <div class="fee-stat-info">
+                <div class="value" id="feeStatOverdue">0</div>
+                <div class="label">Overdue</div>
+              </div>
+            </div>
+          </div>
+
           <div class="card">
-            <div class="card-header">
+            <div class="card-header" style="display: flex; justify-content: space-between; align-items: center;">
               <div class="card-title">💰 Fee Management</div>
+              <button class="btn btn-sm btn-outline" onclick="sortFeeTable()">⇅ Sort by Due Date</button>
             </div>
             <div class="table-wrap">
-              <table>
+              <table class="modern-table">
                 <thead>
-                  <tr><th>#</th><th>Student</th><th>Month</th><th>Amount</th><th>Due Date</th><th>Status</th><th>Paid On</th><th>Update</th></tr>
+                  <tr><th>#</th><th>Student</th><th>Month</th><th>Amount</th><th>Due Date</th><th>Status</th><th>Paid On</th><th style="text-align:right;">Actions</th></tr>
                 </thead>
-                <tbody>
+                <tbody id="feeTableBody">
                   {% for f in fees %}
-                  <tr>
+                  <tr class="fee-row" data-fee-id="{{ f.id }}" data-status="{{ f.status }}" data-due="{{ f.due_date }}" data-student="{{ f.student_id }}" data-name="{{ f.student_name|escape }}" data-amount="{{ f.amount }}">
                     <td>{{ loop.index }}</td>
                     <td><strong>{{ f.student_name }}</strong></td>
                     <td>{{ f.month }}</td>
-                    <td>₹{{ "%.0f"|format(f.amount) }}</td>
+                    <td style="font-weight: 600;">₹{{ "%.0f"|format(f.amount) }}</td>
                     <td>
-                      <div>{{ f.due_date }}</div>
-                      <button class="btn btn-sm" style="padding:2px 4px;font-size:10px" onclick="openEditFeeDetails({{ f.id }}, {{ f.amount }}, '{{ f.due_date }}')">📅 Edit</button>
+                      <div class="fee-due-date-raw">{{ f.due_date }}</div>
+                      <!-- The dynamic label will be injected here by JS -->
+                      <div class="fee-dynamic-label"></div>
                     </td>
                     <td>
-                      {% if f.status == 'paid' %}<span class="badge badge-success">✅ Paid</span>
-                      {% elif f.status == 'overdue' %}<span class="badge badge-danger">⚠️ Overdue</span>
-                      {% else %}<span class="badge badge-warning">⏳ Pending</span>{% endif %}
+                      {% if f.status == 'paid' %}
+                        <span class="badge badge-success" style="display:flex;align-items:center;gap:4px;width:fit-content;">✅ Paid</span>
+                      {% else %}
+                        <span class="badge badge-warning" style="display:flex;align-items:center;gap:4px;width:fit-content;">⏳ Pending</span>
+                      {% endif %}
                     </td>
                     <td>{{ f.payment_date or '—' }}</td>
-                    <td>
-                      <div style="display:flex;gap:4px">
-                        <form method="POST" action="/fees/update/{{ f.id }}" class="action-form">
-                          <select name="status" style="padding:4px 8px;border-radius:4px;border:1px solid #ddd;font-size:12px">
-                            <option value="pending" {% if f.status=='pending' %}selected{% endif %}>Pending</option>
-                            <option value="paid" {% if f.status=='paid' %}selected{% endif %}>Paid</option>
-                            <option value="overdue" {% if f.status=='overdue' %}selected{% endif %}>Overdue</option>
-                          </select>
-                          <button type="submit" class="btn btn-sm btn-success">💾</button>
-                        </form>
-                        <form method="POST" action="/fees/delete/{{ f.id }}" class="action-form" onsubmit="return confirm('Delete fee record?')">
-                          <button type="submit" class="btn btn-sm btn-danger">🗑️</button>
+                    <td style="text-align:right;">
+                      <div style="display:flex;gap:6px;justify-content:flex-end;">
+                        <!-- JS Quick Actions -->
+                        {% if f.status != 'paid' %}
+                          <button type="button" class="btn btn-sm btn-success" onclick="quickMarkPaid({{ f.id }})" title="Mark as Paid">✅ Paid</button>
+                          <button type="button" class="btn btn-sm" style="background:#f59e0b;color:white;" onclick="openSendSMS({{ f.student_id }}, '{{ f.student_name|escape }}')" title="Send Reminder">💬</button>
+                        {% endif %}
+                        <button class="btn btn-sm btn-outline" onclick="openEditFeeDetails({{ f.id }}, {{ f.amount }}, '{{ f.due_date }}')">✏️ Edit</button>
+                        <form method="POST" action="/fees/delete/{{ f.id }}" class="action-form" style="margin:0;" onsubmit="return confirm('Delete fee record?')">
+                          <button type="submit" class="btn btn-sm btn-danger" title="Delete">🗑️</button>
                         </form>
                       </div>
                     </td>
                   </tr>
                   {% else %}
-                  <tr><td colspan="8" style="text-align:center;padding:30px;color:#999">No fee records.</td></tr>
+                  <tr class="empty-row"><td colspan="8" style="text-align:center;padding:40px;color:#94a3b8;">No fee records found.</td></tr>
                   {% endfor %}
                 </tbody>
               </table>
@@ -1665,6 +1700,150 @@
       if (!e.target.closest('.action-menu-wrap')) {
         document.querySelectorAll('.action-dropdown').forEach(d => d.classList.remove('show'));
       }
+    });
+
+    // ---- Fee Alerts System ----
+    function calculateFeeAlerts() {
+      const today = new Date();
+      today.setHours(0,0,0,0);
+      
+      let pendingCount = 0;
+      let dueSoonCount = 0;
+      let overdueCount = 0;
+      let dueTodayCount = 0;
+
+      document.querySelectorAll('#feeTableBody .fee-row').forEach(row => {
+        const rawDateStr = row.getAttribute('data-due');
+        const status = row.getAttribute('data-status');
+        const labelDiv = row.querySelector('.fee-dynamic-label');
+        if (!labelDiv) return;
+        
+        // Reset classes
+        row.classList.remove('fee-paid', 'fee-overdue', 'fee-due-soon');
+        labelDiv.innerHTML = '';
+        
+        if (status === 'paid') {
+          row.classList.add('fee-paid');
+          return; // skip counts for paid
+        }
+        
+        pendingCount++;
+        if (!rawDateStr) return; // No date set
+        
+        const parts = rawDateStr.split('-');
+        if (parts.length !== 3) return;
+        const dueDate = new Date(parts[0], parts[1]-1, parts[2]);
+        dueDate.setHours(0,0,0,0);
+        
+        const diffTime = dueDate.getTime() - today.getTime();
+        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+        
+        if (diffDays < 0) {
+          overdueCount++;
+          row.classList.add('fee-overdue');
+          labelDiv.innerHTML = `<span class="fee-label-badge overdue">Overdue by ${Math.abs(diffDays)} Days</span>`;
+        } else if (diffDays === 0) {
+          dueTodayCount++;
+          row.classList.add('fee-due-soon');
+          labelDiv.innerHTML = `<span class="fee-label-badge due-soon">Due Today</span>`;
+        } else if (diffDays === 1) {
+          dueSoonCount++;
+          row.classList.add('fee-due-soon');
+          labelDiv.innerHTML = `<span class="fee-label-badge due-soon">Due Tomorrow</span>`;
+        } else if (diffDays <= 7) {
+          dueSoonCount++;
+          row.classList.add('fee-due-soon');
+          labelDiv.innerHTML = `<span class="fee-label-badge due-soon">Due in ${diffDays} Days</span>`;
+        } else {
+          labelDiv.innerHTML = `<span class="fee-label-badge pending">Pending</span>`;
+        }
+      });
+      
+      // Update Summary Cards
+      const setVal = (id, val) => { if(document.getElementById(id)) document.getElementById(id).innerText = val; };
+      setVal('feeStatTotalPending', pendingCount);
+      setVal('feeStatDueSoon', dueSoonCount);
+      setVal('feeStatOverdue', overdueCount);
+      setVal('feeStatDueToday', dueTodayCount);
+      
+      // Update Sidebar Badge
+      const badge = document.getElementById('sidebarFeeBadge');
+      if (badge) {
+        const urgentCount = overdueCount + dueTodayCount + dueSoonCount;
+        if (urgentCount > 0) {
+          badge.style.display = 'inline-block';
+          badge.innerText = urgentCount;
+        } else {
+          badge.style.display = 'none';
+        }
+      }
+    }
+
+    function sortFeeTable() {
+      const tbody = document.getElementById('feeTableBody');
+      if (!tbody) return;
+      const rows = Array.from(tbody.querySelectorAll('.fee-row'));
+      
+      rows.sort((a, b) => {
+        const statusA = a.getAttribute('data-status');
+        const statusB = b.getAttribute('data-status');
+        
+        // Paid items always go to the bottom
+        if (statusA === 'paid' && statusB !== 'paid') return 1;
+        if (statusA !== 'paid' && statusB === 'paid') return -1;
+        
+        const dateAStr = a.getAttribute('data-due');
+        const dateBStr = b.getAttribute('data-due');
+        const dateA = dateAStr ? new Date(dateAStr).getTime() : Infinity;
+        const dateB = dateBStr ? new Date(dateBStr).getTime() : Infinity;
+        
+        return dateA - dateB;
+      });
+      
+      rows.forEach(row => tbody.appendChild(row));
+    }
+
+    async function quickMarkPaid(feeId) {
+      if (!confirm("Are you sure you want to mark this fee as paid?")) return;
+      
+      try {
+        const formData = new URLSearchParams();
+        formData.append('status', 'paid');
+        const res = await fetch(`/fees/update/${feeId}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: formData.toString()
+        });
+        
+        if (res.ok || res.redirected) { // fetch might see 302 redirect on success
+          const row = document.querySelector(`.fee-row[data-fee-id="${feeId}"]`);
+          if (row) {
+            row.setAttribute('data-status', 'paid');
+            const statusCell = row.querySelector('td:nth-child(6)');
+            if (statusCell) {
+              statusCell.innerHTML = `<span class="badge badge-success" style="display:flex;align-items:center;gap:4px;width:fit-content;">✅ Paid</span>`;
+            }
+            const actionsCell = row.querySelector('td:nth-child(8) > div');
+            if (actionsCell) {
+               actionsCell.innerHTML = `
+                 <button class="btn btn-sm btn-outline" onclick="openEditFeeDetails(${feeId}, ${row.getAttribute('data-amount')}, '${row.getAttribute('data-due')}')">✏️ Edit</button>
+                 <form method="POST" action="/fees/delete/${feeId}" class="action-form" style="margin:0;" onsubmit="return confirm('Delete fee record?')">
+                   <button type="submit" class="btn btn-sm btn-danger" title="Delete">🗑️</button>
+                 </form>
+               `;
+            }
+            calculateFeeAlerts();
+          }
+        }
+      } catch (err) {
+        console.error("Error marking fee as paid", err);
+        window.location.reload(); 
+      }
+    }
+    
+    document.addEventListener('DOMContentLoaded', () => {
+      calculateFeeAlerts();
+      sortFeeTable(); 
     });
   </script>
 </body>

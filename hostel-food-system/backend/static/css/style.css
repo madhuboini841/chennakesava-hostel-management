@@ -1990,3 +1990,109 @@ tbody td { padding: 10px 14px; color: var(--text); vertical-align: middle; }
 .btn-preview-outline { background: white; border: 1px solid var(--border); color: #0f172a; }
 .btn-preview-danger { background: #fef2f2; border: 1px solid #fecaca; color: var(--danger); }
 .btn-preview-danger:hover { background: #fee2e2; }
+
+/* ============================================================
+   UPCOMING FEE ALERTS SYSTEM
+   ============================================================ */
+
+.fee-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 20px;
+  margin-bottom: 24px;
+}
+
+.fee-stat-card {
+  background: white;
+  border-radius: 12px;
+  padding: 20px;
+  box-shadow: 0 4px 15px rgba(0,0,0,0.05);
+  border: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  transition: transform 0.2s;
+}
+
+.fee-stat-card:hover {
+  transform: translateY(-2px);
+}
+
+.fee-stat-icon {
+  width: 48px;
+  height: 48px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 24px;
+}
+.fee-stat-icon.red { background: #fee2e2; color: #ef4444; }
+.fee-stat-icon.amber { background: #fef3c7; color: #f59e0b; }
+.fee-stat-icon.blue { background: #e0e7ff; color: #4f46e5; }
+.fee-stat-icon.green { background: #dcfce3; color: #10b981; }
+
+.fee-stat-info .value {
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--text-dark);
+  line-height: 1.2;
+}
+.fee-stat-info .label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-light);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+/* Row Highlights */
+tr.fee-row { transition: all 0.2s; border-left: 4px solid transparent; }
+tr.fee-row.fee-overdue {
+  background-color: #fff1f2;
+}
+tr.fee-row.fee-overdue:hover { background-color: #ffe4e6; }
+tr.fee-row.fee-overdue td { border-bottom-color: #fecdd3; }
+tr.fee-row.fee-overdue td:first-child { border-left-color: #ef4444; }
+
+tr.fee-row.fee-due-soon {
+  background-color: #fffbeb;
+}
+tr.fee-row.fee-due-soon:hover { background-color: #fef3c7; }
+tr.fee-row.fee-due-soon td { border-bottom-color: #fde68a; }
+tr.fee-row.fee-due-soon td:first-child { border-left-color: #f59e0b; }
+
+tr.fee-row.fee-paid {
+  background-color: #f0fdf4;
+}
+tr.fee-row.fee-paid:hover { background-color: #dcfce7; }
+tr.fee-row.fee-paid td { border-bottom-color: #bbf7d0; }
+tr.fee-row.fee-paid td:first-child { border-left-color: #10b981; }
+
+/* Dynamic Labels */
+.fee-label-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 700;
+  margin-top: 4px;
+}
+.fee-label-badge.overdue { background: #ef4444; color: white; }
+.fee-label-badge.due-soon { background: #f59e0b; color: white; }
+.fee-label-badge.paid { background: #10b981; color: white; }
+.fee-label-badge.pending { background: #94a3b8; color: white; }
+
+/* Sidebar Badge */
+.sidebar-badge {
+  background: #ef4444;
+  color: white;
+  font-size: 11px;
+  font-weight: bold;
+  padding: 2px 6px;
+  border-radius: 10px;
+  margin-left: auto;
+  display: none; /* hidden if 0 */
+}
