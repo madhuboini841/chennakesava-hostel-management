@@ -157,6 +157,7 @@ CREATE TABLE IF NOT EXISTS sms_logs (
     mobile_number VARCHAR(15) NOT NULL,
     message TEXT NOT NULL,
     status VARCHAR(50) DEFAULT 'sent',
+    error_message TEXT,
     sent_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY(student_id) REFERENCES students(id) ON DELETE CASCADE
 );
@@ -172,7 +173,11 @@ CREATE TABLE IF NOT EXISTS settings (
 
 -- Initialize setting for Fast2SMS API Key
 INSERT IGNORE INTO settings (setting_key, setting_value) VALUES ('fast2sms_api_key', '');
-
+INSERT IGNORE INTO settings (setting_key, setting_value) VALUES ('sms_target_student', 'true');
+INSERT IGNORE INTO settings (setting_key, setting_value) VALUES ('sms_target_parent', 'false');
+INSERT IGNORE INTO settings (setting_key, setting_value) VALUES ('sms_template_due_soon', 'Dear {name}, your hostel fee of Rs.{amount} is due in {days} days ({due_date}). Please pay on time to avoid late fees.');
+INSERT IGNORE INTO settings (setting_key, setting_value) VALUES ('sms_template_overdue', 'URGENT: Dear {name}, your hostel fee of Rs.{amount} is OVERDUE. Due date was {due_date}. Please pay immediately.');
+INSERT IGNORE INTO settings (setting_key, setting_value) VALUES ('sms_template_paid', 'Dear {name}, we have received your hostel fee payment of Rs.{amount}. Thank you!');
 -- ============================================================
 -- SEED DATA: Insert sample rooms
 -- ============================================================

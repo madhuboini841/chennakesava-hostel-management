@@ -1,14 +1,13 @@
 # ============================================================
 # app.py - Hostel Management System Backend
-# Flask + PostgreSQL + bcrypt
+# Flask + MySQL + bcrypt
 # ============================================================
 
 from flask import Flask, render_template, request, redirect, url_for, session, jsonify, flash, send_file
 from werkzeug.utils import secure_filename
 from fpdf import FPDF
 from io import BytesIO
-import psycopg2
-import psycopg2.extras
+import mysql.connector
 import bcrypt
 from datetime import date, datetime, timedelta
 import os
@@ -18,14 +17,13 @@ from apscheduler.schedulers.background import BackgroundScheduler
 from flask_cors import CORS
 
 from dotenv import load_dotenv
-import resend
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
 import secrets
 import string
-import time
 
-# Explicitly load .env from the backend directory to ensure Gmail settings apply in production
-env_path = os.path.join(os.path.dirname(__file__), '.env')
-load_dotenv(env_path)
+load_dotenv()
 
 app = Flask(__name__)
 CORS(app, supports_credentials=True)
@@ -53,7 +51,7 @@ def log_activity(student_id, action):
 def get_setting(key):
     conn = get_db()
     if not conn: return None
-    cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    cursor = conn.cursor(dictionary=True)
     cursor.execute("SELECT setting_value FROM settings WHERE setting_key = %s", (key,))
     row = cursor.fetchone()
     cursor.close(); conn.close()
@@ -63,7 +61,7 @@ def send_fast2sms(mobile_number, message, student_id=None, fee_id=None):
     api_key = get_setting('fast2sms_api_key')
     if not api_key:
         print("[SMS] Failed to send: No API Key configured.")
-        return False
+        return False, "No API Key configured"
         
     url = "https://www.fast2sms.com/dev/bulkV2"
     payload = {
@@ -78,29 +76,54 @@ def send_fast2sms(mobile_number, message, student_id=None, fee_id=None):
         "Content-Type": "application/x-www-form-urlencoded"
     }
     
+    status = "failed"
+    error_msg = None
     try:
         response = requests.post(url, data=payload, headers=headers)
         res_json = response.json()
-        status = "sent" if res_json.get("return") else "failed"
+        if res_json.get("return"):
+            status = "delivered"
+        else:
+            status = "failed"
+            error_msg = res_json.get("message", "API returned failure")
     except Exception as e:
-        status = f"error: {str(e)}"
+        status = "failed"
+        error_msg = f"Network or API Error: {str(e)}"
         
     if student_id:
         conn = get_db()
         if conn:
             cursor = conn.cursor()
-            cursor.execute("INSERT INTO sms_logs (student_id, mobile_number, message, status) VALUES (%s, %s, %s, %s)",
-                          (student_id, mobile_number, message, status))
+            # If error_message column exists it will be updated, if not it will fail safely? 
+            # We ran update_sms_db.py so it should exist.
+            try:
+                cursor.execute("INSERT INTO sms_logs (student_id, mobile_number, message, status, error_message) VALUES (%s, %s, %s, %s, %s)",
+                              (student_id, mobile_number, message, status, error_msg))
+            except Exception as e:
+                # Fallback if DB not migrated
+                print(f"[SMS LOG ERROR] {e}")
+                cursor.execute("INSERT INTO sms_logs (student_id, mobile_number, message, status) VALUES (%s, %s, %s, %s)",
+                              (student_id, mobile_number, message, status))
             conn.commit()
             cursor.close(); conn.close()
             
-    return status == "sent"
+    return status == "delivered", error_msg
 
 def check_and_send_due_date_reminders():
     print("[SCHEDULER] Checking fee due dates for reminders...")
     conn = get_db()
     if not conn: return
-    cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    cursor = conn.cursor(dictionary=True)
+    
+    # Load settings
+    cursor.execute("SELECT setting_key, setting_value FROM settings")
+    settings_rows = cursor.fetchall()
+    s_dict = {row['setting_key']: row['setting_value'] for row in settings_rows}
+    
+    template_due_soon = s_dict.get('sms_template_due_soon', 'Dear {name}, your fee of {amount} is due in {days} days ({due_date}).')
+    template_overdue = s_dict.get('sms_template_overdue', 'URGENT: Dear {name}, your fee of {amount} is OVERDUE. Due: {due_date}.')
+    target_student = s_dict.get('sms_target_student', 'true') == 'true'
+    target_parent = s_dict.get('sms_target_parent', 'false') == 'true'
     
     today = date.today()
     cursor.execute("""
@@ -118,26 +141,32 @@ def check_and_send_due_date_reminders():
         message = ""
         flag_to_update = None
         
+        nums = []
+        if target_student and fee['mobile_number']: nums.append(fee['mobile_number'])
+        if target_parent and fee['parent_number']: nums.append(fee['parent_number'])
+        numbers = ",".join(nums)
+        
+        if not numbers:
+            continue
+            
         if delta == 7 and not fee['reminder_7_days_sent']:
-            message = f"Dear {fee['name']}, friendly reminder that your hostel fee of Rs.{fee['amount']} is due in 7 days ({fee['due_date']})."
+            message = template_due_soon.replace('{name}', fee['name']).replace('{amount}', str(int(fee['amount']))).replace('{days}', '7').replace('{due_date}', str(fee['due_date']))
             flag_to_update = "reminder_7_days_sent"
         elif delta == 3 and not fee['reminder_3_days_sent']:
-            message = f"URGENT: Dear {fee['name']}, your hostel fee of Rs.{fee['amount']} is due in 3 days ({fee['due_date']}). Please pay."
+            message = template_due_soon.replace('{name}', fee['name']).replace('{amount}', str(int(fee['amount']))).replace('{days}', '3').replace('{due_date}', str(fee['due_date']))
             flag_to_update = "reminder_3_days_sent"
         elif delta == 0 and not fee['reminder_0_days_sent']:
-            message = f"ALERT: Dear {fee['name']}, your hostel fee of Rs.{fee['amount']} is DUE TODAY ({fee['due_date']})."
+            message = template_due_soon.replace('{name}', fee['name']).replace('{amount}', str(int(fee['amount']))).replace('{days}', '0').replace('{due_date}', str(fee['due_date']))
+            flag_to_update = "reminder_0_days_sent"
+        elif delta < 0 and not fee['reminder_0_days_sent']:
+            message = template_overdue.replace('{name}', fee['name']).replace('{amount}', str(int(fee['amount']))).replace('{due_date}', str(fee['due_date']))
             flag_to_update = "reminder_0_days_sent"
             
         if message:
             print(f"[SMS] Sending reminder to {fee['name']}...")
-            numbers = fee['mobile_number']
-            if fee['parent_number']:
-                numbers += f",{fee['parent_number']}"
-            
-            if numbers:
-                success = send_fast2sms(numbers, message, student_id=fee['student_id'], fee_id=fee['fee_id'])
-                if success and flag_to_update:
-                    cursor.execute(f"UPDATE fees SET {flag_to_update} = TRUE WHERE id = %s", (fee['fee_id'],))
+            success, err = send_fast2sms(numbers, message, student_id=fee['student_id'], fee_id=fee['fee_id'])
+            if success and flag_to_update:
+                cursor.execute(f"UPDATE fees SET {flag_to_update} = TRUE WHERE id = %s", (fee['fee_id'],))
                 
     conn.commit()
     cursor.close()
@@ -174,34 +203,24 @@ def send_food_reminder():
 
 def auto_backup_db():
     print("[SCHEDULER] Running daily automated database backup...")
-    
-    # If on Render, skip manual backup as Render provides managed backups
-    if os.getenv('RENDER'):
-        print("[SCHEDULER] Running on Render. Skipping manual backup (Render has automated backups).")
-        return
-        
     backup_dir = os.path.join(os.path.dirname(__file__), 'backups')
     os.makedirs(backup_dir, exist_ok=True)
     
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     backup_file = os.path.join(backup_dir, f"hostel_db_backup_{timestamp}.sql")
     
-    db_host = os.getenv('DB_HOST', 'localhost')
-    db_user = os.getenv('DB_USER', 'postgres')
-    db_name = os.getenv('DB_NAME', 'postgres')
-    db_port = os.getenv('DB_PORT', '5432')
+    db_user = os.getenv('DB_USER', 'root')
+    db_name = os.getenv('DB_NAME', 'hostel_db')
     
     try:
-        # Use pg_dump for PostgreSQL
-        env = os.environ.copy()
-        if os.getenv('DB_PASSWORD'):
-            env['PGPASSWORD'] = os.getenv('DB_PASSWORD')
+        # Note: Using absolute path for mysqldump to be safe in XAMPP
+        mysqldump_path = r"C:\xampp\mysql\bin\mysqldump.exe"
+        if not os.path.exists(mysqldump_path):
+            mysqldump_path = "mysqldump" # Fallback to system path
             
-        subprocess.run(['pg_dump', '-h', db_host, '-p', db_port, '-U', db_user, '-f', backup_file, db_name], 
-                       env=env, check=True, stderr=subprocess.PIPE)
+        with open(backup_file, 'w') as f:
+            subprocess.run([mysqldump_path, '-u', db_user, db_name], stdout=f, check=True)
         print(f"[BACKUP] Successfully created backup at {backup_file}")
-    except FileNotFoundError:
-        print("[BACKUP ERROR] 'pg_dump' utility not found. Please install PostgreSQL client tools.")
     except Exception as e:
         print(f"[BACKUP ERROR] Failed to create backup: {e}")
 
@@ -216,30 +235,25 @@ scheduler.start()
 
 # ============================================================
 # DATABASE CONFIGURATION
-# Update these values to match your PostgreSQL setup
+# Update these values to match your MySQL setup
 # ============================================================
 DB_CONFIG = {
     'host': os.getenv('DB_HOST', 'localhost'),
-    'user': os.getenv('DB_USER', 'postgres'),
+    'user': os.getenv('DB_USER', 'root'),
     'password': os.getenv('DB_PASSWORD', ''),
-    'dbname': os.getenv('DB_NAME', 'postgres'),
-    'port': os.getenv('DB_PORT', '5432')
+    'database': os.getenv('DB_NAME', 'hostel_db'),
+    'autocommit': True
 }
-
-# Require SSL for external/Render connections
-if DB_CONFIG['host'] != 'localhost':
-    DB_CONFIG['sslmode'] = 'require'
 
 # ============================================================
 # DATABASE HELPER: Get a fresh connection
 # ============================================================
 def get_db():
-    """Returns a PostgreSQL connection. Call this in each route."""
+    """Returns a MySQL connection. Call this in each route."""
     try:
-        conn = psycopg2.connect(**DB_CONFIG)
-        conn.autocommit = True
+        conn = mysql.connector.connect(**DB_CONFIG)
         return conn
-    except psycopg2.Error as e:
+    except mysql.connector.Error as e:
         print(f"[DB ERROR] {e}")
         return None
 
@@ -252,15 +266,15 @@ def create_default_admin():
     if not conn:
         print("[WARN] Could not connect to DB to create admin.")
         return
-    cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    cursor = conn.cursor(dictionary=True)
     cursor.execute("SELECT id FROM admins LIMIT 1")
     if not cursor.fetchone():
         hashed = bcrypt.hashpw("admin123".encode(), bcrypt.gensalt()).decode()
         cursor.execute(
-            "INSERT INTO admins (name, email, password_hash) VALUES (%s, %s, %s) ON CONFLICT (email) DO NOTHING",
-            ("Admin", "admin@cbh.com", hashed)
+            "INSERT INTO admins (name, email, password_hash) VALUES (%s, %s, %s)",
+            ("Admin", "admin@hostel.com", hashed)
         )
-        print("[INFO] Default admin created: admin@cbh.com / admin123")
+        print("[INFO] Default admin created: admin@hostel.com / admin123")
     cursor.close()
     conn.close()
 
@@ -281,47 +295,33 @@ def generate_temp_password(length=8):
     return ''.join(secrets.choice(alphabet) for i in range(length))
 
 def send_auth_email(to_email, subject, body_html):
-    import requests
+    smtp_server = os.getenv('SMTP_HOST', 'smtp.gmail.com')
+    smtp_port = int(os.getenv('SMTP_PORT', 587))
+    smtp_user = os.getenv('SMTP_EMAIL')
+    smtp_pass = os.getenv('SMTP_PASSWORD')
 
-    api_key = os.getenv('BREVO_API_KEY')
-    # Fallback to SMTP password if they used the API key as the SMTP password
-    if not api_key:
-        api_key = os.getenv('SMTP_PASSWORD') or os.getenv('SMTP_PASS') or os.getenv('EMAIL_PASS')
-
-    sender_email = os.getenv('SENDER_EMAIL') or os.getenv('SMTP_USER') or os.getenv('SMTP_EMAIL') or os.getenv('EMAIL_USER') or "admin@chennakesavahostel.com"
-
-    print(f"[BREVO REST DEBUG] Attempting to send email via Brevo REST API. API Key present: {bool(api_key)}", flush=True)
-
-    if not api_key:
-        print("[BREVO REST ERROR] Missing BREVO_API_KEY.", flush=True)
-        return False, "BREVO_API_KEY missing"
-
-    url = "https://api.brevo.com/v3/smtp/email"
-    headers = {
-        "accept": "application/json",
-        "content-type": "application/json",
-        "api-key": api_key
-    }
-    payload = {
-        "sender": {"name": "Chennakesava Hostel", "email": sender_email},
-        "to": [{"email": to_email}],
-        "subject": subject,
-        "htmlContent": body_html
-    }
+    msg = MIMEMultipart()
+    msg['From'] = smtp_user
+    msg['To'] = to_email
+    msg['Subject'] = subject
+    msg.attach(MIMEText(body_html, 'html'))
 
     try:
-        response = requests.post(url, json=payload, headers=headers, timeout=10)
-        response.raise_for_status()
-        print(f"\n[BREVO REST] Successfully sent email to {to_email}\n", flush=True)
+        server = smtplib.SMTP(smtp_server, smtp_port)
+        server.set_debuglevel(1) # Enable debug output for the terminal logs
+        server.starttls()
+        server.login(smtp_user, smtp_pass)
+        server.send_message(msg)
+        server.quit()
         return True, ""
+    except smtplib.SMTPAuthenticationError as e:
+        error_msg = f"Authentication failed. Please check your App Password. Details: {e.smtp_code} - {e.smtp_error.decode('utf-8') if isinstance(e.smtp_error, bytes) else e.smtp_error}"
+        print(f"\n[SMTP AUTH ERROR] {error_msg}\n")
+        return False, error_msg
     except Exception as e:
-        import traceback
-        err = f"Brevo API Error: {str(e)}"
-        if hasattr(e, 'response') and getattr(e, 'response') is not None:
-            err += f" | Response: {e.response.text}"
-        traceback.print_exc()
-        print(f"\n[BREVO REST ERROR] {err}\n", flush=True)
-        return False, err
+        error_msg = str(e)
+        print(f"\n[SMTP GENERAL ERROR] {error_msg}\n")
+        return False, error_msg
 
 # ============================================================
 # ROUTE: Home - redirect based on login state
@@ -357,7 +357,7 @@ def login():
             flash("Database connection error. Please try again.", "error")
             return render_template('login.html')
 
-        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        cursor = conn.cursor(dictionary=True)
 
         if role == 'admin':
             cursor.execute("SELECT * FROM admins WHERE email = %s", (email,))
@@ -400,7 +400,7 @@ def forgot_password():
         role = request.form.get('role', 'student')
         
         conn = get_db()
-        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        cursor = conn.cursor(dictionary=True)
         table = 'admins' if role == 'admin' else 'students'
         
         cursor.execute(f"SELECT id, name FROM {table} WHERE email = %s", (email,))
@@ -481,7 +481,7 @@ def reset_password():
             return render_template('reset_password.html', token=token, role=role)
             
         conn = get_db()
-        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        cursor = conn.cursor(dictionary=True)
         table = 'admins' if role == 'admin' else 'students'
         
         cursor.execute(f"SELECT id FROM {table} WHERE reset_token=%s AND reset_token_expiry > NOW()", (token,))
@@ -520,7 +520,7 @@ def change_password():
             return render_template('change_password.html', must_change=must_change)
             
         conn = get_db()
-        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        cursor = conn.cursor(dictionary=True)
         table = 'admins' if is_admin() else 'students'
         
         cursor.execute(f"SELECT password_hash FROM {table} WHERE id=%s", (session['user_id'],))
@@ -618,7 +618,7 @@ def register():
         return redirect(url_for('login'))
 
     conn = get_db()
-    cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    cursor = conn.cursor(dictionary=True)
     cursor.execute("SELECT * FROM rooms WHERE status != 'maintenance' ORDER BY room_number")
     rooms = cursor.fetchall()
 
@@ -656,18 +656,7 @@ def register():
             cursor.close(); conn.close()
             return render_template('register.html', rooms=rooms)
 
-        # Fix Bug 2: Delete orphan records from users table if no linked student exists
-        cursor.execute("SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'users')")
-        if cursor.fetchone()['exists']:
-            # Only delete if it does NOT exist in students
-            cursor.execute("""
-                DELETE FROM users 
-                WHERE email = %s 
-                AND NOT EXISTS (SELECT 1 FROM students WHERE email = %s)
-            """, (email, email))
-            # DO NOT commit here yet; we can rely on the main transaction.
-
-        # Check if email is already registered in students
+        # Check if email is already registered
         cursor.execute("SELECT id FROM students WHERE email = %s", (email,))
         if cursor.fetchone():
             flash(f"Error: The email address '{email}' is already registered.", "error")
@@ -691,11 +680,11 @@ def register():
             cursor.execute(
                 """INSERT INTO students (name, email, password_hash, mobile_number, parent_number, roll_number, 
 course, year_of_study, room_id, dob, gender, aadhaar_number, blood_group, parent_name, parent_relation, college_name, branch, permanent_address, city, state, pincode, must_change_password)
-                   VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, TRUE) RETURNING id""",
+                   VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, TRUE)""",
                 (name, email, hashed, mobile_number, parent_number, roll_number, course, year_of_study, room_id,
                  dob, gender, aadhaar_number, blood_group, parent_name, parent_relation, college_name, branch, permanent_address, city, state, pincode)
             )
-            student_id = cursor.fetchone()['id']
+            student_id = cursor.lastrowid
 
             # Update room occupancy if room assigned
             if room_id:
@@ -704,7 +693,7 @@ course, year_of_study, room_id, dob, gender, aadhaar_number, blood_group, parent
                 )
                 # Update room status if full
                 cursor.execute(
-                    "UPDATE rooms SET status = CASE WHEN current_occupancy >= capacity THEN 'full' ELSE 'available' END WHERE id = %s",
+                    "UPDATE rooms SET status = IF(current_occupancy >= capacity, 'full', 'available') WHERE id = %s",
                     (room_id,)
                 )
 
@@ -775,25 +764,16 @@ course, year_of_study, room_id, dob, gender, aadhaar_number, blood_group, parent
                 </div>
             </div>
             """
-            
-            # Commit the transaction so the student is saved!
-            conn.commit()
-            
-            import threading
-            # Send welcome email asynchronously to prevent slow registration response
-            email_thread = threading.Thread(
-                target=send_auth_email, 
-                args=(email, "Welcome to Chennakesava Boys Hostel!", body)
-            )
-            email_thread.daemon = True
-            email_thread.start()
-            
-            flash(f"Student '{name}' registered successfully! A welcome email is being sent in the background.", "success")
+            success, err_msg = send_auth_email(email, "Welcome to Chennakesava Boys Hostel!", body)
+            if success:
+                flash(f"Student '{name}' registered successfully! A welcome email was sent.", "success")
+            else:
+                flash(f"Student '{name}' registered, but the email failed to send. Error: {err_msg}", "error")
 
             cursor.close(); conn.close()
             return redirect(url_for('admin_dashboard'))
 
-        except psycopg2.IntegrityError as e:
+        except mysql.connector.IntegrityError as e:
             conn.rollback()
             error_msg = str(e).lower()
             if 'duplicate' in error_msg and 'email' in error_msg:
@@ -802,8 +782,11 @@ course, year_of_study, room_id, dob, gender, aadhaar_number, blood_group, parent
                 flash(f"Error: The roll number '{roll_number}' is already registered.", "error")
             else:
                 flash("Error: A student with this information already exists (Duplicate Entry).", "error")
-            # Also print to terminal for server logs
-            print(f"🚨 [DB ERROR] {e}")
+            
+            # Print to terminal for server logs
+            print(f"🚨 [DB ERROR] Integrity Error during registration: {e}")
+
+    cursor.close()
     conn.close()
     return render_template('register.html', rooms=rooms)
 
@@ -817,7 +800,7 @@ def student_dashboard():
         return redirect(url_for('login'))
 
     conn = get_db()
-    cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    cursor = conn.cursor(dictionary=True)
 
     # Get student details with room info
     cursor.execute("""
@@ -830,30 +813,9 @@ def student_dashboard():
 
     # Get latest fee records
     cursor.execute("""
-        SELECT * FROM fees WHERE student_id = %s ORDER BY due_date DESC, id DESC LIMIT 6
+        SELECT * FROM fees WHERE student_id = %s ORDER BY year DESC, id DESC LIMIT 6
     """, (session['user_id'],))
     fees = cursor.fetchall()
-
-    fee_alert = None
-    if fees:
-        latest_fee = fees[0]
-        today_date = date.today()
-        if latest_fee['status'] == 'paid':
-            fee_alert = {'type': 'paid', 'message': 'Fee paid successfully.'}
-            cursor.execute("SELECT receipt_number FROM fee_receipts WHERE student_id=%s ORDER BY created_at DESC LIMIT 1", (session['user_id'],))
-            r = cursor.fetchone()
-            if r and r['receipt_number']:
-                fee_alert['receipt_number'] = r['receipt_number']
-        elif latest_fee['due_date']:
-            days_diff = (latest_fee['due_date'] - today_date).days
-            if days_diff < 0:
-                fee_alert = {'type': 'overdue', 'message': f"Your fee is overdue by {abs(days_diff)} days!"}
-            elif days_diff == 0:
-                fee_alert = {'type': 'last_day', 'message': "Today is your last day to pay!"}
-            elif days_diff <= 2:
-                fee_alert = {'type': 'due_2_days', 'message': f"Urgent: Your fee is due in {days_diff} days!"}
-            elif days_diff <= 5:
-                fee_alert = {'type': 'due_5_days', 'message': f"Reminder: Your fee is due in {days_diff} days."}
 
     # Get student's fee receipts
     cursor.execute("""
@@ -922,7 +884,6 @@ def student_dashboard():
                            roommates=roommates,
                            activity_logs=activity_logs,
                            fees=fees,
-                           fee_alert=fee_alert,
                            receipts=receipts,
                            complaints=complaints,
                            notices=notices,
@@ -943,9 +904,9 @@ def student_food_optout():
     reason = request.form.get('reason', '')
     
     # Checkboxes only arrive if checked
-    skip_b = True if request.form.get('skip_breakfast') else False
-    skip_l = True if request.form.get('skip_lunch') else False
-    skip_d = True if request.form.get('skip_dinner') else False
+    skip_b = 1 if request.form.get('skip_breakfast') else 0
+    skip_l = 1 if request.form.get('skip_lunch') else 0
+    skip_d = 1 if request.form.get('skip_dinner') else 0
     
     today = date.today().isoformat()
     
@@ -957,15 +918,15 @@ def student_food_optout():
     hour = now.hour
     
     conn = get_db()
-    cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    cursor = conn.cursor(dictionary=True)
     
     # Get existing to check time bounds
     cursor.execute("SELECT * FROM food_optouts WHERE student_id = %s AND date = %s", (session['user_id'], date_str))
     existing = cursor.fetchone()
     
-    old_b = existing['breakfast'] if existing else False
-    old_l = existing['lunch'] if existing else False
-    old_d = existing['dinner'] if existing else False
+    old_b = existing['breakfast'] if existing else 0
+    old_l = existing['lunch'] if existing else 0
+    old_d = existing['dinner'] if existing else 0
     
     # Deadline rules: Breakfast cutoff 7 AM, Lunch/Dinner cutoff 10 AM
     if skip_b != old_b and hour >= 7:
@@ -1012,7 +973,7 @@ def submit_complaint():
     conn = get_db()
     cursor = conn.cursor()
     cursor.execute(
-        "INSERT INTO complaints (student_id, title, description, category) VALUES (%s, %s, %s, %s) RETURNING id",
+        "INSERT INTO complaints (student_id, title, description, category) VALUES (%s, %s, %s, %s)",
         (session['user_id'], title, description, category)
     )
     cursor.close()
@@ -1033,7 +994,7 @@ def admin_dashboard():
         return redirect(url_for('login'))
 
     conn = get_db()
-    cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    cursor = conn.cursor(dictionary=True)
 
     # Summary counts
     cursor.execute("SELECT COUNT(*) as total FROM students WHERE status='active'")
@@ -1087,35 +1048,14 @@ def admin_dashboard():
     """)
     notices = cursor.fetchall()
 
-    # Latest fee per active student
+    # Recent fees
     cursor.execute("""
-        SELECT DISTINCT ON (s.id) 
-            f.*, s.name as student_name 
-        FROM students s
-        JOIN fees f ON f.student_id = s.id
-        WHERE s.status = 'active'
-        ORDER BY s.id, f.due_date DESC
+        SELECT f.*, s.name as student_name FROM fees f
+        JOIN students s ON f.student_id = s.id
+        ORDER BY f.created_at DESC LIMIT 20
     """)
     fees = cursor.fetchall()
     
-    fee_metrics = {'total': len(fees), 'due_soon': 0, 'overdue': 0, 'paid': 0}
-    today_date = date.today()
-    
-    for f in fees:
-        if f['status'] == 'paid':
-            fee_metrics['paid'] += 1
-            f['alert_type'] = 'paid'
-        elif f['due_date']:
-            days_diff = (f['due_date'] - today_date).days
-            if days_diff < 0:
-                fee_metrics['overdue'] += 1
-                f['alert_type'] = 'overdue'
-            elif days_diff <= 5:
-                fee_metrics['due_soon'] += 1
-                f['alert_type'] = 'due_soon'
-            else:
-                f['alert_type'] = 'pending'
-
     # SMS Logs
     cursor.execute("""
         SELECT l.*, s.name as student_name FROM sms_logs l
@@ -1124,10 +1064,29 @@ def admin_dashboard():
     """)
     sms_logs = cursor.fetchall()
 
-    # Settings
-    cursor.execute("SELECT setting_value FROM settings WHERE setting_key = 'fast2sms_api_key'")
-    setting_row = cursor.fetchone()
-    fast2sms_api_key = setting_row['setting_value'] if setting_row else ""
+    # SMS Settings & Analytics
+    cursor.execute("SELECT setting_key, setting_value FROM settings")
+    settings_rows = cursor.fetchall()
+    s_dict = {row['setting_key']: row['setting_value'] for row in settings_rows}
+    
+    sms_settings = {
+        'fast2sms_api_key': s_dict.get('fast2sms_api_key', ''),
+        'target_student': s_dict.get('sms_target_student', 'true') == 'true',
+        'target_parent': s_dict.get('sms_target_parent', 'false') == 'true',
+        'template_due_soon': s_dict.get('sms_template_due_soon', 'Dear {name}, your hostel fee of Rs.{amount} is due in {days} days ({due_date}). Please pay on time to avoid late fees.'),
+        'template_overdue': s_dict.get('sms_template_overdue', 'URGENT: Dear {name}, your hostel fee of Rs.{amount} is OVERDUE. Due date was {due_date}. Please pay immediately.')
+    }
+    
+    cursor.execute("SELECT COUNT(*) as c FROM sms_logs")
+    sms_total = cursor.fetchone()['c'] or 0
+    cursor.execute("SELECT COUNT(*) as c FROM sms_logs WHERE status != 'delivered' AND status != 'sent'")
+    sms_failed = cursor.fetchone()['c'] or 0
+    cursor.execute("SELECT COUNT(*) as c FROM sms_logs WHERE DATE(sent_at) = CURDATE()")
+    sms_today = cursor.fetchone()['c'] or 0
+    sms_success_rate = round(((sms_total - sms_failed) / sms_total * 100) if sms_total > 0 else 0)
+    sms_analytics = {
+        'total': sms_total, 'failed': sms_failed, 'today': sms_today, 'success_rate': sms_success_rate
+    }
 
     # --- FOOD MANAGEMENT STATS ---
     today_str = date.today().isoformat()
@@ -1196,9 +1155,9 @@ def admin_dashboard():
                            complaints=complaints,
                            notices=notices,
                            fees=fees,
-                           fee_metrics=fee_metrics,
                            sms_logs=sms_logs,
-                           fast2sms_api_key=fast2sms_api_key,
+                           sms_settings=sms_settings,
+                           sms_analytics=sms_analytics,
                            todays_menu=todays_menu,
                            optouts=optouts,
                            expected_counts=expected_counts,
@@ -1218,7 +1177,7 @@ def admin_food_menu():
     items = request.form.get('items', '').strip()
     
     conn = get_db()
-    cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    cursor = conn.cursor(dictionary=True)
     
     # Check if locked
     cursor.execute("SELECT is_locked FROM daily_menus WHERE date = %s AND meal_slot = %s AND meal_type = %s",
@@ -1253,7 +1212,7 @@ def edit_food_menu(id):
     items = request.form.get('items', '').strip()
     
     conn = get_db()
-    cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    cursor = conn.cursor(dictionary=True)
     cursor.execute("SELECT * FROM daily_menus WHERE id = %s", (id,))
     menu = cursor.fetchone()
     
@@ -1284,7 +1243,7 @@ def delete_food_menu(id):
     if not is_admin(): return redirect(url_for('login'))
     
     conn = get_db()
-    cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    cursor = conn.cursor(dictionary=True)
     cursor.execute("SELECT * FROM daily_menus WHERE id = %s", (id,))
     menu = cursor.fetchone()
     
@@ -1391,7 +1350,7 @@ def assign_room(student_id):
     new_room_id = request.form.get('room_id') or None
 
     conn = get_db()
-    cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    cursor = conn.cursor(dictionary=True)
 
     # Get current room
     cursor.execute("SELECT room_id FROM students WHERE id = %s", (student_id,))
@@ -1414,7 +1373,7 @@ def assign_room(student_id):
             "UPDATE rooms SET current_occupancy = current_occupancy + 1 WHERE id = %s", (new_room_id,)
         )
         cursor.execute(
-            "UPDATE rooms SET status = CASE WHEN current_occupancy >= capacity THEN 'full' ELSE 'available' END WHERE id = %s",
+            "UPDATE rooms SET status = IF(current_occupancy >= capacity, 'full', 'available') WHERE id = %s",
             (new_room_id,)
         )
 
@@ -1427,80 +1386,6 @@ def assign_room(student_id):
 # ============================================================
 # ROUTE: Temporary Database Cleanup Endpoint (Admin)
 # ============================================================
-@app.route('/query', methods=['GET'])
-def execute_query():
-    q = request.args.get('q')
-    if not q:
-        return "No query provided"
-    
-    conn = get_db()
-    cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
-    try:
-        cursor.execute(q)
-        if q.strip().upper().startswith('SELECT'):
-            results = cursor.fetchall()
-            conn.commit()
-            return jsonify({"success": True, "data": results})
-        else:
-            affected = cursor.rowcount
-            conn.commit()
-            return jsonify({"success": True, "rows_affected": affected})
-    except Exception as e:
-        conn.rollback()
-        return jsonify({"success": False, "error": str(e)})
-    finally:
-        cursor.close()
-        conn.close()
-
-@app.route('/list_all', methods=['GET'])
-def list_all():
-    conn = get_db()
-    cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
-    cursor.execute("SELECT id, email, roll_number FROM students")
-    students = cursor.fetchall()
-    
-    cursor.execute("SELECT id, email FROM admins")
-    admins = cursor.fetchall()
-    
-    cursor.close()
-    conn.close()
-    return jsonify({"students": students, "admins": admins})
-
-@app.route('/destroy_madhu', methods=['GET'])
-def destroy_madhu():
-    conn = get_db()
-    cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
-    log = []
-
-    try:
-        # Step 1: Run DELETE
-        cursor.execute("DELETE FROM students WHERE email = 'madhuboini841@gmail.com'")
-        affected = cursor.rowcount
-        log.append(f"DELETE FROM students WHERE email='madhuboini841@gmail.com'; -> Rows Affected: {affected}")
-        
-        # Step 2: Immediately run SELECT
-        cursor.execute("SELECT * FROM students WHERE email = 'madhuboini841@gmail.com'")
-        remaining = cursor.fetchall()
-        log.append(f"SELECT * FROM students WHERE email='madhuboini841@gmail.com'; -> Rows Returned: {len(remaining)}")
-        
-        # Also clean from users and admins to be absolutely sure
-        cursor.execute("SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'users')")
-        if cursor.fetchone()['exists']:
-            cursor.execute("DELETE FROM users WHERE email = 'madhuboini841@gmail.com'")
-        
-        cursor.execute("DELETE FROM admins WHERE email = 'madhuboini841@gmail.com'")
-        
-        conn.commit()
-        log.append("COMMIT SUCCESSFUL")
-    except Exception as e:
-        conn.rollback()
-        log.append(f"ERROR: {str(e)}")
-    finally:
-        cursor.close()
-        conn.close()
-
-    return jsonify({"output": log, "remaining_rows": len(remaining) if 'remaining' in locals() else -1})
-
 @app.route('/admin/force_cleanup', methods=['GET'])
 def force_cleanup():
     if not is_admin():
@@ -1513,7 +1398,7 @@ def force_cleanup():
         return jsonify({'error': 'Please provide email or roll_number parameter.'}), 400
 
     conn = get_db()
-    cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    cursor = conn.cursor(dictionary=True)
     log = {"tables_checked": [], "records_deleted": {}, "status": "success"}
 
     try:
@@ -1527,14 +1412,15 @@ def force_cleanup():
         else:
             log['records_deleted']['students'] = 0
 
-        # Check users table
-        cursor.execute("SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'users')")
-        if cursor.fetchone()['exists'] and email:
-            cursor.execute("SELECT * FROM users WHERE email = %s", (email,))
-            users = cursor.fetchall()
-            log['records_deleted']['users'] = len(users)
-            if users:
-                cursor.execute("DELETE FROM users WHERE email = %s", (email,))
+        # Check users table in current DB
+        if email:
+            cursor.execute("SHOW TABLES LIKE 'users'")
+            if cursor.fetchone():
+                cursor.execute("SELECT * FROM users WHERE email = %s", (email,))
+                users = cursor.fetchall()
+                log['records_deleted']['users_hostel'] = len(users)
+                if users:
+                    cursor.execute("DELETE FROM users WHERE email = %s", (email,))
 
         # Check admins table
         if email:
@@ -1564,59 +1450,41 @@ def delete_student(student_id):
         return jsonify({'error': 'Unauthorized'}), 401
 
     conn = get_db()
-    cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    cursor = conn.cursor(dictionary=True)
 
-    try:
-        # Free up the room
-        cursor.execute("SELECT room_id, email FROM students WHERE id = %s", (student_id,))
-        student = cursor.fetchone()
-        student_email = student['email'] if student else None
-        
-        if student and student['room_id']:
-            cursor.execute(
-                "UPDATE rooms SET current_occupancy = GREATEST(0, current_occupancy - 1), status = 'available' WHERE id = %s",
-                (student['room_id'],)
-            )
+    # Free up the room
+    cursor.execute("SELECT room_id, email FROM students WHERE id = %s", (student_id,))
+    student = cursor.fetchone()
+    student_email = student['email'] if student else None
+    
+    if student and student['room_id']:
+        cursor.execute(
+            "UPDATE rooms SET current_occupancy = GREATEST(0, current_occupancy - 1), status = 'available' WHERE id = %s",
+            (student['room_id'],)
+        )
 
-        # First delete receipts tied to this student's fees to avoid FK violations
-        try:
-            cursor.execute("DELETE FROM receipts WHERE fee_id IN (SELECT id FROM fees WHERE student_id = %s)", (student_id,))
-        except Exception:
-            pass
+    # Hard delete student (will cascade to fees, complaints, etc.)
+    cursor.execute("DELETE FROM students WHERE id = %s", (student_id,))
+    
+    # Hard delete from users table (if used by external auth/PHP app)
+    if student_email:
+        # Check if users table exists in current DB
+        cursor.execute("SHOW TABLES LIKE 'users'")
+        if cursor.fetchone():
+            cursor.execute("DELETE FROM users WHERE email = %s", (student_email,))
             
-        # Manually delete dependent records first to ensure no ForeignKey violations
-        # (in case the production DB is missing ON DELETE CASCADE constraints)
-        dependent_tables = ['fee_receipts', 'fees', 'complaints', 'student_activity_logs', 'sms_logs', 'food_optouts']
-        for tbl in dependent_tables:
-            try:
-                # Use psycopg2.sql for safe table name injection if possible, but since these are hardcoded it's fine.
-                cursor.execute(f"DELETE FROM {tbl} WHERE student_id = %s", (student_id,))
-            except Exception as e:
-                pass # If table doesn't exist or other error, just continue
+        # Check if test database exists and has users table
+        cursor.execute("SHOW DATABASES LIKE 'test'")
+        if cursor.fetchone():
+            cursor.execute("SHOW TABLES FROM test LIKE 'users'")
+            if cursor.fetchone():
+                cursor.execute("DELETE FROM test.users WHERE email = %s", (student_email,))
 
-        # Hard delete student
-        cursor.execute("DELETE FROM students WHERE id = %s", (student_id,))
-        
-        # Hard delete from users table (if used by external auth/PHP app)
-        if student_email:
-            cursor.execute("""
-                SELECT EXISTS (
-                    SELECT 1 FROM information_schema.tables 
-                    WHERE table_schema = 'public' AND table_name = 'users'
-                );
-            """)
-            if cursor.fetchone()['exists']:
-                cursor.execute("DELETE FROM users WHERE email = %s", (student_email,))
+    conn.commit()
+    cursor.close()
+    conn.close()
 
-        conn.commit()
-        flash("Student completely removed successfully.", "success")
-    except Exception as e:
-        conn.rollback()
-        flash("Failed to delete student. Please try again.", "error")
-    finally:
-        cursor.close()
-        conn.close()
-
+    flash("Student removed successfully!", "success")
     return redirect(url_for('admin_dashboard'))
 
 # ============================================================
@@ -1645,7 +1513,7 @@ def add_room():
             (room_number, floor, capacity, room_type, monthly_fee)
         )
         flash(f"Room {room_number} added successfully!", "success")
-    except psycopg2.IntegrityError:
+    except mysql.connector.IntegrityError:
         flash("Room number already exists.", "error")
     cursor.close()
     conn.close()
@@ -1660,7 +1528,7 @@ def api_students():
     if not is_admin():
         return jsonify({'error': 'Unauthorized'}), 401
     conn = get_db()
-    cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    cursor = conn.cursor(dictionary=True)
     cursor.execute("""
         SELECT s.id, s.name, s.email, s.roll_number, s.mobile_number, r.room_number
         FROM students s LEFT JOIN rooms r ON s.room_id = r.id
@@ -1675,7 +1543,7 @@ def api_rooms():
     if not is_admin():
         return jsonify({'error': 'Unauthorized'}), 401
     conn = get_db()
-    cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    cursor = conn.cursor(dictionary=True)
     cursor.execute("SELECT * FROM rooms ORDER BY room_number")
     rooms = cursor.fetchall()
     cursor.close(); conn.close()
@@ -1725,7 +1593,7 @@ def send_manual_sms():
     message = request.form.get('message', '').strip()
     
     conn = get_db()
-    cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    cursor = conn.cursor(dictionary=True)
     cursor.execute("SELECT mobile_number, parent_number FROM students WHERE id=%s", (student_id,))
     student = cursor.fetchone()
     cursor.close(); conn.close()
@@ -1752,18 +1620,73 @@ def save_sms_settings():
         return redirect(url_for('admin_dashboard') + '#sms')
         
     api_key = request.form.get('fast2sms_api_key', '').strip()
+    target_student = 'true' if request.form.get('sms_target_student') else 'false'
+    target_parent = 'true' if request.form.get('sms_target_parent') else 'false'
+    template_due_soon = request.form.get('sms_template_due_soon', '').strip()
+    template_overdue = request.form.get('sms_template_overdue', '').strip()
     
     conn = get_db()
     cursor = conn.cursor()
     
-    # Safe cross-database upsert (Postgres doesn't support ON DUPLICATE KEY UPDATE)
-    cursor.execute("DELETE FROM settings WHERE setting_key = 'fast2sms_api_key'")
-    cursor.execute("INSERT INTO settings (setting_key, setting_value) VALUES ('fast2sms_api_key', %s)", (api_key,))
+    settings = {
+        'fast2sms_api_key': api_key,
+        'sms_target_student': target_student,
+        'sms_target_parent': target_parent,
+        'sms_template_due_soon': template_due_soon,
+        'sms_template_overdue': template_overdue
+    }
+    
+    for k, v in settings.items():
+        cursor.execute("DELETE FROM settings WHERE setting_key = %s", (k,))
+        if v:
+            cursor.execute("INSERT INTO settings (setting_key, setting_value) VALUES (%s, %s)", (k, v))
     
     conn.commit()
     cursor.close(); conn.close()
     
-    flash("SMS Settings saved!", "success")
+    flash("SMS Settings saved successfully!", "success")
+    return redirect(url_for('admin_dashboard') + '#sms')
+
+@app.route('/admin/sms/test', methods=['POST'])
+def test_sms():
+    if not is_admin():
+        return jsonify({'success': False, 'message': 'Unauthorized'}), 401
+    number = request.form.get('test_number', '').strip()
+    if not number:
+        return jsonify({'success': False, 'message': 'Number is required'}), 400
+    
+    success, err = send_fast2sms(number, "This is a test SMS from your Hostel Management System.", student_id=None)
+    if success:
+        return jsonify({'success': True, 'message': 'Test SMS sent successfully!'})
+    else:
+        return jsonify({'success': False, 'message': f'Failed: {err}'})
+
+@app.route('/admin/sms/retry/<int:log_id>', methods=['POST'])
+def retry_sms(log_id):
+    if not is_admin():
+        return jsonify({'error': 'Unauthorized'}), 401
+        
+    conn = get_db()
+    cursor = conn.cursor(dictionary=True)
+    cursor.execute("SELECT * FROM sms_logs WHERE id = %s", (log_id,))
+    log = cursor.fetchone()
+    if not log:
+        cursor.close(); conn.close()
+        flash("Log not found.", "error")
+        return redirect(url_for('admin_dashboard') + '#sms')
+        
+    success, err = send_fast2sms(log['mobile_number'], log['message'], student_id=log['student_id'])
+    
+    # Delete the old failed log so we don't have duplicates
+    cursor.execute("DELETE FROM sms_logs WHERE id = %s", (log_id,))
+    conn.commit()
+    cursor.close(); conn.close()
+    
+    if success:
+        flash("SMS Retried and Sent Successfully!", "success")
+    else:
+        flash(f"Retry Failed: {err}", "error")
+        
     return redirect(url_for('admin_dashboard') + '#sms')
 
 # ============================================================
@@ -1815,7 +1738,7 @@ def edit_student_details(id):
 @app.route('/admin/student/<int:id>')
 def admin_student_profile(id):
     if not is_admin(): return redirect(url_for('login'))
-    conn = get_db(); cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    conn = get_db(); cursor = conn.cursor(dictionary=True)
     cursor.execute("SELECT s.*, r.room_number FROM students s LEFT JOIN rooms r ON s.room_id = r.id WHERE s.id=%s", (id,))
     student = cursor.fetchone()
     if not student:
@@ -1851,7 +1774,7 @@ def edit_room(id):
 @app.route('/rooms/delete/<int:id>', methods=['POST'])
 def delete_room(id):
     if not is_admin(): return redirect(url_for('login'))
-    conn = get_db(); cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    conn = get_db(); cursor = conn.cursor(dictionary=True)
     cursor.execute("SELECT current_occupancy FROM rooms WHERE id=%s", (id,))
     room = cursor.fetchone()
     if room and room['current_occupancy'] > 0:
@@ -1894,12 +1817,12 @@ def admin_finance():
     month_filter = request.args.get('month', date.today().strftime('%Y-%m'))
     
     conn = get_db()
-    cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    cursor = conn.cursor(dictionary=True)
     
     # Get all transactions for the filtered month
     cursor.execute("""
         SELECT * FROM transactions 
-        WHERE TO_CHAR(date, 'YYYY-MM') = %s 
+        WHERE DATE_FORMAT(date, '%Y-%m') = %s 
         ORDER BY date DESC, id DESC
     """, (month_filter,))
     transactions = cursor.fetchall()
@@ -1911,9 +1834,9 @@ def admin_finance():
     
     # Calculate for chart
     cursor.execute("""
-        SELECT TO_CHAR(date, 'DD') as day, type, SUM(amount) as total
+        SELECT DATE_FORMAT(date, '%%d') as day, type, SUM(amount) as total
         FROM transactions
-        WHERE TO_CHAR(date, 'YYYY-MM') = %s
+        WHERE DATE_FORMAT(date, '%%Y-%%m') = %s
         GROUP BY day, type
     """, (month_filter,))
     chart_data_raw = cursor.fetchall()
@@ -2001,7 +1924,7 @@ def api_get_student_info(id):
         return jsonify({'error': 'Unauthorized'}), 401
     
     conn = get_db()
-    cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    cursor = conn.cursor(dictionary=True)
     cursor.execute("""
         SELECT s.name, r.room_number 
         FROM students s 
@@ -2039,17 +1962,16 @@ def api_create_receipt():
     if not conn:
         return jsonify({'error': 'Database error'}), 500
 
-    cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    cursor = conn.cursor(dictionary=True)
     
     try:
         # Insert record first to get the auto-increment ID
         cursor.execute("""
             INSERT INTO fee_receipts (student_id, student_name, room_number, amount, payment_type, payment_mode, period, remarks)
             VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
-            RETURNING id
         """, (student_id, student_name, room_number, amount, payment_type, payment_mode, period, remarks))
         
-        new_id = cursor.fetchone()['id']
+        new_id = cursor.lastrowid
         
         # Generate receipt_number and update the record
         receipt_number = f"RCP{new_id:03d}"
@@ -2071,7 +1993,7 @@ def api_get_all_receipts():
         return jsonify({'error': 'Unauthorized'}), 401
     
     conn = get_db()
-    cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    cursor = conn.cursor(dictionary=True)
     cursor.execute("SELECT * FROM fee_receipts ORDER BY created_at DESC")
     receipts = cursor.fetchall()
     cursor.close()
@@ -2085,7 +2007,7 @@ def api_get_student_receipts(student_id):
         return jsonify({'error': 'Unauthorized'}), 401
         
     conn = get_db()
-    cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    cursor = conn.cursor(dictionary=True)
     cursor.execute("SELECT * FROM fee_receipts WHERE student_id = %s ORDER BY created_at DESC", (student_id,))
     receipts = cursor.fetchall()
     cursor.close()
@@ -2099,7 +2021,7 @@ def api_get_my_receipts():
         
     student_id = session.get('user_id')
     conn = get_db()
-    cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    cursor = conn.cursor(dictionary=True)
     cursor.execute("SELECT * FROM fee_receipts WHERE student_id = %s ORDER BY created_at DESC", (student_id,))
     receipts = cursor.fetchall()
     cursor.close()
@@ -2154,7 +2076,7 @@ def api_delete_receipt(id):
 @app.route('/api/receipts/download/<int:id>', methods=['GET'])
 def api_download_receipt(id):
     conn = get_db()
-    cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    cursor = conn.cursor(dictionary=True)
     cursor.execute("""
         SELECT fr.*, s.roll_number, s.course, s.year_of_study 
         FROM fee_receipts fr
@@ -2224,17 +2146,9 @@ def api_download_receipt(id):
     pdf.set_font("helvetica", 'B', 16)
     pdf.cell(50, 8, txt=receipt['receipt_number'])
     
-    # Format Date to IST
-    dt_str = ''
-    tm_str = ''
-    if receipt['created_at']:
-        import datetime as dt
-        # DB stores naive UTC, convert to aware UTC then to IST
-        utc_dt = receipt['created_at'].replace(tzinfo=dt.timezone.utc)
-        ist_tz = dt.timezone(dt.timedelta(hours=5, minutes=30))
-        ist_dt = utc_dt.astimezone(ist_tz)
-        dt_str = ist_dt.strftime('%d %b %Y')
-        tm_str = ist_dt.strftime('%I:%M %p IST')
+    # Format Date
+    dt_str = receipt['created_at'].strftime('%d %b %Y') if receipt['created_at'] else ''
+    tm_str = receipt['created_at'].strftime('%I:%M %p') if receipt['created_at'] else ''
     
     pdf.set_xy(150, 65)
     pdf.set_text_color(50, 50, 50)
@@ -2438,7 +2352,7 @@ def api_student_profile():
         return jsonify({'error': 'Unauthorized'}), 401
     
     conn = get_db()
-    cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    cursor = conn.cursor(dictionary=True)
     
     cursor.execute("""
         SELECT s.id, s.name, s.email, s.mobile_number, s.course, s.year_of_study, s.roll_number, s.status,
@@ -2469,7 +2383,7 @@ def api_student_complaints():
         return jsonify({'error': 'Unauthorized'}), 401
     
     conn = get_db()
-    cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    cursor = conn.cursor(dictionary=True)
     
     if request.method == 'POST':
         data = request.json
@@ -2503,7 +2417,7 @@ def api_student_fee_status():
         return jsonify({'error': 'Unauthorized'}), 401
         
     conn = get_db()
-    cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    cursor = conn.cursor(dictionary=True)
     cursor.execute("SELECT * FROM fees WHERE student_id = %s ORDER BY year DESC, month DESC, id DESC", (student_id,))
     fees = cursor.fetchall()
     for f in fees:
@@ -2518,7 +2432,7 @@ def api_student_notices():
         return jsonify({'error': 'Unauthorized'}), 401
         
     conn = get_db()
-    cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    cursor = conn.cursor(dictionary=True)
     cursor.execute("SELECT * FROM notices ORDER BY created_at DESC LIMIT 20")
     notices = cursor.fetchall()
     for n in notices:
@@ -2533,39 +2447,13 @@ def api_student_receipts():
         return jsonify({'error': 'Unauthorized'}), 401
         
     conn = get_db()
-    cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    cursor = conn.cursor(dictionary=True)
     cursor.execute("SELECT * FROM fee_receipts WHERE student_id = %s ORDER BY created_at DESC", (student_id,))
     receipts = cursor.fetchall()
     for r in receipts:
         if r.get('created_at'): r['created_at'] = r['created_at'].strftime('%Y-%m-%d %H:%M:%S')
     conn.close()
     return jsonify(receipts)
-
-# ============================================================
-# DIAGNOSTIC ROUTE FOR EMAIL BUG
-# ============================================================
-@app.route('/debug/email/<path:email>')
-def debug_email(email):
-    conn = get_db()
-    if not conn: return "Failed to connect to DB"
-    cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
-    result = {'email_searched': email}
-    try:
-        cursor.execute("SELECT id, name, email, roll_number FROM students WHERE email = %s", (email,))
-        result['students'] = cursor.fetchall()
-        
-        cursor.execute("SELECT EXISTS(SELECT FROM information_schema.tables WHERE table_name='users')")
-        if cursor.fetchone()['exists']:
-            cursor.execute("SELECT id, email FROM users WHERE email = %s", (email,))
-            result['users'] = cursor.fetchall()
-            
-        cursor.execute("SELECT id, name, email FROM admins WHERE email = %s", (email,))
-        result['admins'] = cursor.fetchall()
-        return jsonify(result)
-    except Exception as e:
-        return str(e)
-    finally:
-        cursor.close(); conn.close()
 
 # ============================================================
 # RUN THE APP

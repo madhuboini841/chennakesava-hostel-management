@@ -61,7 +61,7 @@ def send_fast2sms(mobile_number, message, student_id=None, fee_id=None):
     api_key = get_setting('fast2sms_api_key')
     if not api_key:
         print("[SMS] Failed to send: No API Key configured.")
-        return False
+        return False, "No API Key configured"
         
     url = "https://www.fast2sms.com/dev/bulkV2"
     payload = {
@@ -76,29 +76,54 @@ def send_fast2sms(mobile_number, message, student_id=None, fee_id=None):
         "Content-Type": "application/x-www-form-urlencoded"
     }
     
+    status = "failed"
+    error_msg = None
     try:
         response = requests.post(url, data=payload, headers=headers)
         res_json = response.json()
-        status = "sent" if res_json.get("return") else "failed"
+        if res_json.get("return"):
+            status = "delivered"
+        else:
+            status = "failed"
+            error_msg = res_json.get("message", "API returned failure")
     except Exception as e:
-        status = f"error: {str(e)}"
+        status = "failed"
+        error_msg = f"Network or API Error: {str(e)}"
         
     if student_id:
         conn = get_db()
         if conn:
             cursor = conn.cursor()
-            cursor.execute("INSERT INTO sms_logs (student_id, mobile_number, message, status) VALUES (%s, %s, %s, %s)",
-                          (student_id, mobile_number, message, status))
+            # If error_message column exists it will be updated, if not it will fail safely? 
+            # We ran update_sms_db.py so it should exist.
+            try:
+                cursor.execute("INSERT INTO sms_logs (student_id, mobile_number, message, status, error_message) VALUES (%s, %s, %s, %s, %s)",
+                              (student_id, mobile_number, message, status, error_msg))
+            except Exception as e:
+                # Fallback if DB not migrated
+                print(f"[SMS LOG ERROR] {e}")
+                cursor.execute("INSERT INTO sms_logs (student_id, mobile_number, message, status) VALUES (%s, %s, %s, %s)",
+                              (student_id, mobile_number, message, status))
             conn.commit()
             cursor.close(); conn.close()
             
-    return status == "sent"
+    return status == "delivered", error_msg
 
 def check_and_send_due_date_reminders():
     print("[SCHEDULER] Checking fee due dates for reminders...")
     conn = get_db()
     if not conn: return
     cursor = conn.cursor(dictionary=True)
+    
+    # Load settings
+    cursor.execute("SELECT setting_key, setting_value FROM settings")
+    settings_rows = cursor.fetchall()
+    s_dict = {row['setting_key']: row['setting_value'] for row in settings_rows}
+    
+    template_due_soon = s_dict.get('sms_template_due_soon', 'Dear {name}, your fee of {amount} is due in {days} days ({due_date}).')
+    template_overdue = s_dict.get('sms_template_overdue', 'URGENT: Dear {name}, your fee of {amount} is OVERDUE. Due: {due_date}.')
+    target_student = s_dict.get('sms_target_student', 'true') == 'true'
+    target_parent = s_dict.get('sms_target_parent', 'false') == 'true'
     
     today = date.today()
     cursor.execute("""
@@ -116,26 +141,32 @@ def check_and_send_due_date_reminders():
         message = ""
         flag_to_update = None
         
+        nums = []
+        if target_student and fee['mobile_number']: nums.append(fee['mobile_number'])
+        if target_parent and fee['parent_number']: nums.append(fee['parent_number'])
+        numbers = ",".join(nums)
+        
+        if not numbers:
+            continue
+            
         if delta == 7 and not fee['reminder_7_days_sent']:
-            message = f"Dear {fee['name']}, friendly reminder that your hostel fee of Rs.{fee['amount']} is due in 7 days ({fee['due_date']})."
+            message = template_due_soon.replace('{name}', fee['name']).replace('{amount}', str(int(fee['amount']))).replace('{days}', '7').replace('{due_date}', str(fee['due_date']))
             flag_to_update = "reminder_7_days_sent"
         elif delta == 3 and not fee['reminder_3_days_sent']:
-            message = f"URGENT: Dear {fee['name']}, your hostel fee of Rs.{fee['amount']} is due in 3 days ({fee['due_date']}). Please pay."
+            message = template_due_soon.replace('{name}', fee['name']).replace('{amount}', str(int(fee['amount']))).replace('{days}', '3').replace('{due_date}', str(fee['due_date']))
             flag_to_update = "reminder_3_days_sent"
         elif delta == 0 and not fee['reminder_0_days_sent']:
-            message = f"ALERT: Dear {fee['name']}, your hostel fee of Rs.{fee['amount']} is DUE TODAY ({fee['due_date']})."
+            message = template_due_soon.replace('{name}', fee['name']).replace('{amount}', str(int(fee['amount']))).replace('{days}', '0').replace('{due_date}', str(fee['due_date']))
+            flag_to_update = "reminder_0_days_sent"
+        elif delta < 0 and not fee['reminder_0_days_sent']:
+            message = template_overdue.replace('{name}', fee['name']).replace('{amount}', str(int(fee['amount']))).replace('{due_date}', str(fee['due_date']))
             flag_to_update = "reminder_0_days_sent"
             
         if message:
             print(f"[SMS] Sending reminder to {fee['name']}...")
-            numbers = fee['mobile_number']
-            if fee['parent_number']:
-                numbers += f",{fee['parent_number']}"
-            
-            if numbers:
-                success = send_fast2sms(numbers, message, student_id=fee['student_id'], fee_id=fee['fee_id'])
-                if success and flag_to_update:
-                    cursor.execute(f"UPDATE fees SET {flag_to_update} = TRUE WHERE id = %s", (fee['fee_id'],))
+            success, err = send_fast2sms(numbers, message, student_id=fee['student_id'], fee_id=fee['fee_id'])
+            if success and flag_to_update:
+                cursor.execute(f"UPDATE fees SET {flag_to_update} = TRUE WHERE id = %s", (fee['fee_id'],))
                 
     conn.commit()
     cursor.close()
@@ -1033,10 +1064,29 @@ def admin_dashboard():
     """)
     sms_logs = cursor.fetchall()
 
-    # Settings
-    cursor.execute("SELECT setting_value FROM settings WHERE setting_key = 'fast2sms_api_key'")
-    setting_row = cursor.fetchone()
-    fast2sms_api_key = setting_row['setting_value'] if setting_row else ""
+    # SMS Settings & Analytics
+    cursor.execute("SELECT setting_key, setting_value FROM settings")
+    settings_rows = cursor.fetchall()
+    s_dict = {row['setting_key']: row['setting_value'] for row in settings_rows}
+    
+    sms_settings = {
+        'fast2sms_api_key': s_dict.get('fast2sms_api_key', ''),
+        'target_student': s_dict.get('sms_target_student', 'true') == 'true',
+        'target_parent': s_dict.get('sms_target_parent', 'false') == 'true',
+        'template_due_soon': s_dict.get('sms_template_due_soon', 'Dear {name}, your hostel fee of Rs.{amount} is due in {days} days ({due_date}). Please pay on time to avoid late fees.'),
+        'template_overdue': s_dict.get('sms_template_overdue', 'URGENT: Dear {name}, your hostel fee of Rs.{amount} is OVERDUE. Due date was {due_date}. Please pay immediately.')
+    }
+    
+    cursor.execute("SELECT COUNT(*) as c FROM sms_logs")
+    sms_total = cursor.fetchone()['c'] or 0
+    cursor.execute("SELECT COUNT(*) as c FROM sms_logs WHERE status != 'delivered' AND status != 'sent'")
+    sms_failed = cursor.fetchone()['c'] or 0
+    cursor.execute("SELECT COUNT(*) as c FROM sms_logs WHERE DATE(sent_at) = CURDATE()")
+    sms_today = cursor.fetchone()['c'] or 0
+    sms_success_rate = round(((sms_total - sms_failed) / sms_total * 100) if sms_total > 0 else 0)
+    sms_analytics = {
+        'total': sms_total, 'failed': sms_failed, 'today': sms_today, 'success_rate': sms_success_rate
+    }
 
     # --- FOOD MANAGEMENT STATS ---
     today_str = date.today().isoformat()
@@ -1106,7 +1156,8 @@ def admin_dashboard():
                            notices=notices,
                            fees=fees,
                            sms_logs=sms_logs,
-                           fast2sms_api_key=fast2sms_api_key,
+                           sms_settings=sms_settings,
+                           sms_analytics=sms_analytics,
                            todays_menu=todays_menu,
                            optouts=optouts,
                            expected_counts=expected_counts,
@@ -1569,18 +1620,73 @@ def save_sms_settings():
         return redirect(url_for('admin_dashboard') + '#sms')
         
     api_key = request.form.get('fast2sms_api_key', '').strip()
+    target_student = 'true' if request.form.get('sms_target_student') else 'false'
+    target_parent = 'true' if request.form.get('sms_target_parent') else 'false'
+    template_due_soon = request.form.get('sms_template_due_soon', '').strip()
+    template_overdue = request.form.get('sms_template_overdue', '').strip()
     
     conn = get_db()
     cursor = conn.cursor()
     
-    # Safe cross-database upsert (Postgres doesn't support ON DUPLICATE KEY UPDATE)
-    cursor.execute("DELETE FROM settings WHERE setting_key = 'fast2sms_api_key'")
-    cursor.execute("INSERT INTO settings (setting_key, setting_value) VALUES ('fast2sms_api_key', %s)", (api_key,))
+    settings = {
+        'fast2sms_api_key': api_key,
+        'sms_target_student': target_student,
+        'sms_target_parent': target_parent,
+        'sms_template_due_soon': template_due_soon,
+        'sms_template_overdue': template_overdue
+    }
+    
+    for k, v in settings.items():
+        cursor.execute("DELETE FROM settings WHERE setting_key = %s", (k,))
+        if v:
+            cursor.execute("INSERT INTO settings (setting_key, setting_value) VALUES (%s, %s)", (k, v))
     
     conn.commit()
     cursor.close(); conn.close()
     
-    flash("SMS Settings saved!", "success")
+    flash("SMS Settings saved successfully!", "success")
+    return redirect(url_for('admin_dashboard') + '#sms')
+
+@app.route('/admin/sms/test', methods=['POST'])
+def test_sms():
+    if not is_admin():
+        return jsonify({'success': False, 'message': 'Unauthorized'}), 401
+    number = request.form.get('test_number', '').strip()
+    if not number:
+        return jsonify({'success': False, 'message': 'Number is required'}), 400
+    
+    success, err = send_fast2sms(number, "This is a test SMS from your Hostel Management System.", student_id=None)
+    if success:
+        return jsonify({'success': True, 'message': 'Test SMS sent successfully!'})
+    else:
+        return jsonify({'success': False, 'message': f'Failed: {err}'})
+
+@app.route('/admin/sms/retry/<int:log_id>', methods=['POST'])
+def retry_sms(log_id):
+    if not is_admin():
+        return jsonify({'error': 'Unauthorized'}), 401
+        
+    conn = get_db()
+    cursor = conn.cursor(dictionary=True)
+    cursor.execute("SELECT * FROM sms_logs WHERE id = %s", (log_id,))
+    log = cursor.fetchone()
+    if not log:
+        cursor.close(); conn.close()
+        flash("Log not found.", "error")
+        return redirect(url_for('admin_dashboard') + '#sms')
+        
+    success, err = send_fast2sms(log['mobile_number'], log['message'], student_id=log['student_id'])
+    
+    # Delete the old failed log so we don't have duplicates
+    cursor.execute("DELETE FROM sms_logs WHERE id = %s", (log_id,))
+    conn.commit()
+    cursor.close(); conn.close()
+    
+    if success:
+        flash("SMS Retried and Sent Successfully!", "success")
+    else:
+        flash(f"Retry Failed: {err}", "error")
+        
     return redirect(url_for('admin_dashboard') + '#sms')
 
 # ============================================================

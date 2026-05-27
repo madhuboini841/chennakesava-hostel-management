@@ -682,43 +682,117 @@
 
         <!-- ===== SECTION: SMS ===== -->
         <div id="section-sms" class="dashboard-section" style="display:none">
+          <!-- SMS Analytics Cards -->
+          <div class="sms-stats-grid">
+            <div class="fee-stat-card">
+              <div class="fee-stat-icon blue">📤</div>
+              <div class="fee-stat-info">
+                <div class="value">{{ sms_analytics.total }}</div>
+                <div class="label">Total Sent</div>
+              </div>
+            </div>
+            <div class="fee-stat-card">
+              <div class="fee-stat-icon green">✅</div>
+              <div class="fee-stat-info">
+                <div class="value">{{ sms_analytics.success_rate }}%</div>
+                <div class="label">Success Rate</div>
+              </div>
+            </div>
+            <div class="fee-stat-card">
+              <div class="fee-stat-icon red">❌</div>
+              <div class="fee-stat-info">
+                <div class="value">{{ sms_analytics.failed }}</div>
+                <div class="label">Failed</div>
+              </div>
+            </div>
+            <div class="fee-stat-card">
+              <div class="fee-stat-icon amber">📅</div>
+              <div class="fee-stat-info">
+                <div class="value">{{ sms_analytics.today }}</div>
+                <div class="label">Sent Today</div>
+              </div>
+            </div>
+          </div>
+
           <div class="two-col">
             <!-- SMS Settings -->
             <div class="card">
               <div class="card-header">
-                <div class="card-title">⚙️ Fast2SMS Settings</div>
+                <div class="card-title">⚙️ SMS Configuration</div>
               </div>
               <div class="card-body">
                 <form method="POST" action="/admin/sms/settings">
                   <div class="form-group">
                     <label>Fast2SMS API Key</label>
-                    <input type="text" name="fast2sms_api_key" value="{{ fast2sms_api_key }}" placeholder="Enter your Authorization Key" required>
-                    <small style="color:var(--text-light);display:block;margin-top:4px">Used for sending automated fee reminders.</small>
+                    <div class="password-wrapper">
+                      <input type="password" name="fast2sms_api_key" id="fast2sms_api_key" value="{{ sms_settings.fast2sms_api_key }}" placeholder="Enter your Authorization Key" required>
+                      <button type="button" class="toggle-password" onclick="togglePassword('fast2sms_api_key', this)">👁️</button>
+                    </div>
                   </div>
-                  <button type="submit" class="btn btn-accent">💾 Save Key</button>
+                  
+                  <div class="form-group">
+                    <label>Send automated reminders to:</label>
+                    <div style="display:flex;gap:15px;margin-top:5px;">
+                      <label style="font-weight:normal;cursor:pointer;"><input type="checkbox" name="sms_target_student" {% if sms_settings.target_student %}checked{% endif %}> Student Mobile</label>
+                      <label style="font-weight:normal;cursor:pointer;"><input type="checkbox" name="sms_target_parent" {% if sms_settings.target_parent %}checked{% endif %}> Parent Mobile</label>
+                    </div>
+                  </div>
+
+                  <div class="form-group">
+                    <label>Template: Fee Due Soon (7, 3, 0 Days)</label>
+                    <textarea name="sms_template_due_soon" rows="3" required style="font-size:13px">{{ sms_settings.template_due_soon }}</textarea>
+                    <small style="color:var(--text-light);">Variables: {name}, {amount}, {days}, {due_date}</small>
+                  </div>
+
+                  <div class="form-group">
+                    <label>Template: Fee Overdue</label>
+                    <textarea name="sms_template_overdue" rows="3" required style="font-size:13px">{{ sms_settings.template_overdue }}</textarea>
+                    <small style="color:var(--text-light);">Variables: {name}, {amount}, {due_date}</small>
+                  </div>
+
+                  <div style="display:flex;gap:10px;margin-top:15px;">
+                    <button type="submit" class="btn btn-accent" style="flex:1;">💾 Save</button>
+                    <button type="button" class="btn btn-outline" style="flex:1;" onclick="testSMS()">📡 Test SMS</button>
+                  </div>
                 </form>
               </div>
             </div>
 
             <!-- SMS Delivery Logs -->
-            <div class="card" style="grid-row: span 2">
+            <div class="card">
               <div class="card-header">
-                <div class="card-title">📋 Recent Sent SMS</div>
+                <div class="card-title">📋 Delivery Logs</div>
               </div>
               <div class="table-wrap">
                 <table>
                   <thead>
-                    <tr><th>Date</th><th>Student</th><th>Number</th><th>Status</th></tr>
+                    <tr><th>Date</th><th>Number</th><th>Status</th><th>Action</th></tr>
                   </thead>
                   <tbody>
                     {% for l in sms_logs %}
                     <tr>
-                      <td style="font-size:12px">{{ l.sent_at.strftime('%d %b %Y %H:%M') if l.sent_at else '' }}</td>
-                      <td>{{ l.student_name }}</td>
-                      <td>{{ l.mobile_number }}</td>
+                      <td style="font-size:12px;white-space:nowrap;">{{ l.sent_at.strftime('%d %b %H:%M') if l.sent_at else '' }}<br><strong>{{ l.student_name or 'Test/Admin' }}</strong></td>
+                      <td style="font-size:13px">{{ l.mobile_number }}</td>
                       <td>
-                        {% if l.status == 'sent' %}<span class="badge badge-success">Sent</span>
-                        {% else %}<span class="badge badge-danger">Failed</span>{% endif %}
+                        {% if l.status == 'delivered' %}
+                          <span class="badge badge-success">✅ Delivered</span>
+                        {% elif l.status == 'sent' %}
+                          <span class="badge badge-warning">⏳ Pending</span>
+                        {% else %}
+                          <span class="badge badge-danger">❌ Failed</span>
+                          {% if l.error_message %}
+                            <span class="sms-error-tooltip" title="{{ l.error_message }}">{{ l.error_message }}</span>
+                          {% endif %}
+                        {% endif %}
+                      </td>
+                      <td>
+                        {% if l.status == 'failed' or l.status == 'error' %}
+                        <form method="POST" action="/admin/sms/retry/{{ l.id }}" style="margin:0;">
+                          <button type="submit" class="btn btn-sm btn-outline">🔄 Retry</button>
+                        </form>
+                        {% else %}
+                        —
+                        {% endif %}
                       </td>
                     </tr>
                     {% else %}
@@ -1845,6 +1919,44 @@
       calculateFeeAlerts();
       sortFeeTable(); 
     });
+
+    // ---- SMS SYSTEM ----
+    function togglePassword(inputId, btn) {
+      const input = document.getElementById(inputId);
+      if (input.type === 'password') {
+        input.type = 'text';
+        btn.innerText = '🙈';
+      } else {
+        input.type = 'password';
+        btn.innerText = '👁️';
+      }
+    }
+
+    async function testSMS() {
+      const num = prompt("Enter mobile number for Test SMS (e.g. 9876543210):");
+      if (!num) return;
+      
+      try {
+        const formData = new URLSearchParams();
+        formData.append('test_number', num);
+        
+        const res = await fetch('/admin/sms/test', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: formData.toString()
+        });
+        
+        const data = await res.json();
+        if (data.success) {
+          alert("Test SMS Sent successfully!");
+          window.location.reload();
+        } else {
+          alert("Failed to send Test SMS: " + data.message);
+        }
+      } catch (err) {
+        alert("Error sending Test SMS: " + err);
+      }
+    }
   </script>
 </body>
 </html>
