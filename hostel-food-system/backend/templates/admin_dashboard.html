@@ -230,59 +230,104 @@
         <!-- ===== SECTION: STUDENTS ===== -->
         <div id="section-students" class="dashboard-section" style="display:none">
           <div class="card">
+            <div style="background:red;color:white;padding:10px;text-align:center;font-weight:bold;margin-bottom:10px;border-radius:8px;" class="mobile-only">
+              🚨 NEW MOBILE UI ACTIVE 🚨
+            </div>
             <div class="card-header">
               <div class="card-title">👨‍🎓 All Students</div>
               <a href="/register" class="btn btn-accent btn-sm">➕ Add Student</a>
             </div>
-            <div class="table-wrap">
-              <table>
-                <thead>
-                  <tr>
-                    <th>#</th><th>Name</th><th>Roll No</th><th>Email</th><th>Contacts</th>
-                    <th>Course</th><th>Room</th><th>Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {% for s in students %}
-                  <tr>
-                    <td>{{ loop.index }}</td>
-                    <td><strong>{{ s.name }}</strong></td>
-                    <td>{{ s.roll_number or '—' }}</td>
-                    <td style="font-size:12px">{{ s.email }}</td>
-                    <td>
-                      <div>📱 {{ s.mobile_number or '—' }}</div>
-                      <div style="font-size:11px;color:#777">Parent: {{ s.parent_number or '—' }}</div>
-                      <button class="btn btn-sm" style="padding:2px 4px;font-size:10px" onclick="openEditMobile({{ s.id }}, '{{ s.mobile_number or '' }}', '{{ s.parent_number or '' }}')">✏️ Edit Contacts</button>
-                    </td>
-                    <td>{{ s.course or '—' }}</td>
-                    <td>
+            <div class="card-body" style="padding: 20px;">
+              <!-- Search and Filters -->
+              <div class="student-toolbar">
+                <input type="text" id="studentSearchInput" class="student-search-bar" placeholder="Search by name, roll no, email, or course..." onkeyup="filterStudents()">
+                <div class="student-filters">
+                  <div class="filter-chip active" data-filter="all" onclick="setStudentFilter('all', this)">All Students</div>
+                  <div class="filter-chip" data-filter="assigned" onclick="setStudentFilter('assigned', this)">Assigned Room</div>
+                  <div class="filter-chip" data-filter="unassigned" onclick="setStudentFilter('unassigned', this)">Unassigned</div>
+                </div>
+              </div>
+
+              <!-- Desktop Table -->
+              <div class="desktop-only table-wrap">
+                <table id="studentsTableDesktop">
+                  <thead>
+                    <tr>
+                      <th>#</th><th>Name</th><th>Roll No</th><th>Email</th><th>Contacts</th>
+                      <th>Course</th><th>Room</th><th>Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {% for s in students %}
+                    <tr class="student-row" data-name="{{ s.name|lower }}" data-roll="{{ s.roll_number|lower }}" data-email="{{ s.email|lower }}" data-course="{{ s.course|lower }}" data-room="{{ s.room_number or '' }}">
+                      <td>{{ loop.index }}</td>
+                      <td><strong>{{ s.name }}</strong></td>
+                      <td>{{ s.roll_number or '—' }}</td>
+                      <td style="font-size:12px">{{ s.email }}</td>
+                      <td>
+                        <div>📱 {{ s.mobile_number or '—' }}</div>
+                        <div style="font-size:11px;color:#777">Parent: {{ s.parent_number or '—' }}</div>
+                        <button class="btn btn-sm" style="padding:2px 4px;font-size:10px" onclick="openEditMobile({{ s.id }}, '{{ s.mobile_number or '' }}', '{{ s.parent_number or '' }}')">✏️ Edit Contacts</button>
+                      </td>
+                      <td>{{ s.course or '—' }}</td>
+                      <td>
+                        {% if s.room_number %}
+                          <span class="badge badge-success">{{ s.room_number }}</span>
+                        {% else %}
+                          <span class="badge badge-warning">Unassigned</span>
+                        {% endif %}
+                      </td>
+                      <td style="display:flex;gap:4px;flex-wrap:wrap;max-width:200px">
+                        <a href="/admin/student/{{ s.id }}" class="btn btn-sm btn-primary">👁️ Profile</a>
+                        <button class="btn btn-sm" style="background:#555;color:white" onclick="openEditStudentDetails({{ s.id }}, '{{ s.name|escape }}', '{{ s.email|escape }}', '{{ s.course|escape }}', '{{ s.year_of_study }}')">✏️ Edit Data</button>
+                        <button class="btn btn-sm btn-accent" onclick="openSendSMS({{ s.id }}, '{{ s.name|escape }}')">💬 SMS</button>
+                        <!-- Assign Room button -->
+                        <button class="btn btn-sm btn-info"
+                          onclick="openAssignRoom({{ s.id }}, '{{ s.name|escape }}', {{ s.room_id or 'null' }})">
+                          🛏️ Assign
+                        </button>
+                        <!-- Delete student -->
+                        <form method="POST" action="/students/delete/{{ s.id }}" class="action-form"
+                          onsubmit="return confirm('Remove {{ s.name|escape }} from hostel?')">
+                          <button type="submit" class="btn btn-sm btn-danger">🗑️</button>
+                        </form>
+                      </td>
+                    </tr>
+                    {% else %}
+                    <tr class="empty-row"><td colspan="8" style="text-align:center;padding:30px;color:#999">No students registered yet.</td></tr>
+                    {% endfor %}
+                  </tbody>
+                </table>
+              </div>
+
+              <!-- Mobile Cards -->
+              <div class="mobile-only student-cards-container" id="studentsCardsMobile">
+                {% for s in students %}
+                <div class="student-card-m student-row" data-name="{{ s.name|lower }}" data-roll="{{ s.roll_number|lower }}" data-email="{{ s.email|lower }}" data-course="{{ s.course|lower }}" data-room="{{ s.room_number or '' }}" onclick="openMobileStudentDetail({{ s.id }}, '{{ s.name|escape }}', '{{ s.roll_number or 'N/A' }}', '{{ s.mobile_number or 'N/A' }}', '{{ s.email|escape }}', '{{ s.course or 'N/A' }}', '{{ s.room_number or 'Unassigned' }}', {{ s.room_id or 'null' }}, '{{ s.year_of_study or '' }}')">
+                  <div class="student-card-header">
+                    <div class="student-card-avatar">{{ s.name[0]|upper }}</div>
+                    <div class="student-card-info">
+                      <h4>{{ s.name }}</h4>
+                      <p>{{ s.roll_number or 'No Roll No' }} • {{ s.course or 'N/A' }}</p>
+                    </div>
+                  </div>
+                  <div class="student-meta-m">
+                    <div style="color: #64748b;">
+                      <i class="fas fa-phone-alt" style="font-size:10px;margin-right:4px;"></i> {{ s.mobile_number or 'N/A' }}
+                    </div>
+                    <div>
                       {% if s.room_number %}
-                        <span class="badge badge-success">{{ s.room_number }}</span>
+                        <span class="badge badge-success" style="font-size:11px;">Room: {{ s.room_number }}</span>
                       {% else %}
-                        <span class="badge badge-warning">Unassigned</span>
+                        <span class="badge badge-warning" style="font-size:11px;">Unassigned</span>
                       {% endif %}
-                    </td>
-                    <td style="display:flex;gap:4px;flex-wrap:wrap;max-width:200px">
-                      <a href="/admin/student/{{ s.id }}" class="btn btn-sm btn-primary">👁️ Profile</a>
-                      <button class="btn btn-sm" style="background:#555;color:white" onclick="openEditStudentDetails({{ s.id }}, '{{ s.name|escape }}', '{{ s.email|escape }}', '{{ s.course|escape }}', '{{ s.year_of_study }}')">✏️ Edit Data</button>
-                      <button class="btn btn-sm btn-accent" onclick="openSendSMS({{ s.id }}, '{{ s.name|escape }}')">💬 SMS</button>
-                      <!-- Assign Room button -->
-                      <button class="btn btn-sm btn-info"
-                        onclick="openAssignRoom({{ s.id }}, '{{ s.name|escape }}', {{ s.room_id or 'null' }})">
-                        🛏️ Assign
-                      </button>
-                      <!-- Delete student -->
-                      <form method="POST" action="/students/delete/{{ s.id }}" class="action-form"
-                        onsubmit="return confirm('Remove {{ s.name|escape }} from hostel?')">
-                        <button type="submit" class="btn btn-sm btn-danger">🗑️</button>
-                      </form>
-                    </td>
-                  </tr>
-                  {% else %}
-                  <tr><td colspan="8" style="text-align:center;padding:30px;color:#999">No students registered yet.</td></tr>
-                  {% endfor %}
-                </tbody>
-              </table>
+                    </div>
+                  </div>
+                </div>
+                {% else %}
+                <div class="empty-row" style="text-align:center;padding:30px;color:#999;background:white;border-radius:12px;border:1px solid var(--border);">No students registered yet.</div>
+                {% endfor %}
+              </div>
             </div>
           </div>
         </div>
@@ -378,75 +423,35 @@
 
         <!-- ===== SECTION: FEES ===== -->
         <div id="section-fees" class="dashboard-section" style="display:none">
-          
-          <!-- Fee Alerts Dashboard -->
-          <div class="stats-grid" style="margin-bottom: 20px;">
-            <div class="stat-card">
-              <div class="stat-icon" style="background:var(--primary-light);color:var(--primary)">👥</div>
-              <div class="stat-info">
-                <h3>{{ fee_metrics.total }}</h3>
-                <p>Active Students</p>
-              </div>
-            </div>
-            <div class="stat-card" style="cursor:pointer" onclick="filterFees('due_soon')">
-              <div class="stat-icon" style="background:#fef3c7;color:#92400e">⏳</div>
-              <div class="stat-info">
-                <h3>{{ fee_metrics.due_soon }}</h3>
-                <p>Due Soon</p>
-              </div>
-            </div>
-            <div class="stat-card" style="cursor:pointer" onclick="filterFees('overdue')">
-              <div class="stat-icon" style="background:#fee2e2;color:#991b1b">⚠️</div>
-              <div class="stat-info">
-                <h3>{{ fee_metrics.overdue }}</h3>
-                <p>Overdue</p>
-              </div>
-            </div>
-            <div class="stat-card" style="cursor:pointer" onclick="filterFees('paid')">
-              <div class="stat-icon" style="background:#d1fae5;color:#065f46">✅</div>
-              <div class="stat-info">
-                <h3>{{ fee_metrics.paid }}</h3>
-                <p>Paid</p>
-              </div>
-            </div>
-          </div>
-
           <div class="card">
-            <div class="card-header" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
-              <div class="card-title">💰 Current Fee Status</div>
-              <div style="display:flex; gap:8px;">
-                <button class="btn btn-sm" style="background:var(--bg-light);border:1px solid #ddd;color:#333" onclick="filterFees('all')">All</button>
-                <button class="btn btn-sm" style="background:#fef3c7;border:1px solid #fcd34d;color:#92400e" onclick="filterFees('due_soon')">Due Soon</button>
-                <button class="btn btn-sm" style="background:#fee2e2;border:1px solid #fca5a5;color:#991b1b" onclick="filterFees('overdue')">Overdue</button>
-                <button class="btn btn-sm" style="background:#d1fae5;border:1px solid #6ee7b7;color:#065f46" onclick="filterFees('paid')">Paid</button>
-              </div>
+            <div class="card-header">
+              <div class="card-title">💰 Fee Management</div>
             </div>
             <div class="table-wrap">
               <table>
                 <thead>
                   <tr><th>#</th><th>Student</th><th>Month</th><th>Amount</th><th>Due Date</th><th>Status</th><th>Paid On</th><th>Update</th></tr>
                 </thead>
-                <tbody id="fees-tbody">
+                <tbody>
                   {% for f in fees %}
-                  <tr class="fee-row" data-alert-type="{{ f.alert_type }}">
+                  <tr>
                     <td>{{ loop.index }}</td>
                     <td><strong>{{ f.student_name }}</strong></td>
                     <td>{{ f.month }}</td>
                     <td>₹{{ "%.0f"|format(f.amount) }}</td>
                     <td>
-                      <div style="{% if f.alert_type == 'overdue' %}color:var(--danger);font-weight:bold{% elif f.alert_type == 'due_soon' %}color:var(--warning);font-weight:bold{% endif %}">{{ f.due_date }}</div>
+                      <div>{{ f.due_date }}</div>
                       <button class="btn btn-sm" style="padding:2px 4px;font-size:10px" onclick="openEditFeeDetails({{ f.id }}, {{ f.amount }}, '{{ f.due_date }}')">📅 Edit</button>
                     </td>
                     <td>
-                      {% if f.alert_type == 'paid' %}<span class="badge badge-success">✅ Paid</span>
-                      {% elif f.alert_type == 'overdue' %}<span class="badge badge-danger">⚠️ Overdue</span>
-                      {% elif f.alert_type == 'due_soon' %}<span class="badge badge-warning">⏳ Due Soon</span>
-                      {% else %}<span class="badge" style="background:#e5e7eb;color:#374151">Pending</span>{% endif %}
+                      {% if f.status == 'paid' %}<span class="badge badge-success">✅ Paid</span>
+                      {% elif f.status == 'overdue' %}<span class="badge badge-danger">⚠️ Overdue</span>
+                      {% else %}<span class="badge badge-warning">⏳ Pending</span>{% endif %}
                     </td>
                     <td>{{ f.payment_date or '—' }}</td>
                     <td>
                       <div style="display:flex;gap:4px">
-                        <form method="POST" action="/fees/update/{{ f.id }}" class="action-form" style="display:flex;gap:4px">
+                        <form method="POST" action="/fees/update/{{ f.id }}" class="action-form">
                           <select name="status" style="padding:4px 8px;border-radius:4px;border:1px solid #ddd;font-size:12px">
                             <option value="pending" {% if f.status=='pending' %}selected{% endif %}>Pending</option>
                             <option value="paid" {% if f.status=='paid' %}selected{% endif %}>Paid</option>
@@ -1114,18 +1119,47 @@
     </div>
   </div>
 
-  <script>
-    function filterFees(type) {
-      const rows = document.querySelectorAll('#fees-tbody .fee-row');
-      rows.forEach(row => {
-        if (type === 'all' || row.dataset.alertType === type) {
-          row.style.display = '';
-        } else {
-          row.style.display = 'none';
-        }
-      });
-    }
+  <!-- ====== MODAL: Mobile Student Detail Drawer ====== -->
+  <div class="modal-overlay drawer-modal" id="mobileStudentDetailModal">
+    <div class="modal">
+      <div class="drawer-header">
+        <div class="drawer-close" onclick="closeModal('mobileStudentDetailModal')">✕</div>
+        <div class="drawer-avatar" id="mDetailAvatar">M</div>
+        <div class="drawer-title" id="mDetailName">Student Name</div>
+        <div class="drawer-subtitle" id="mDetailSub">Roll No</div>
+      </div>
+      <div class="drawer-details">
+        <div class="drawer-detail-item">
+          <span class="drawer-detail-label">Phone</span>
+          <span class="drawer-detail-value" id="mDetailPhone">--</span>
+        </div>
+        <div class="drawer-detail-item">
+          <span class="drawer-detail-label">Room</span>
+          <span class="drawer-detail-value" id="mDetailRoom">--</span>
+        </div>
+        <div class="drawer-detail-item" style="grid-column: span 2;">
+          <span class="drawer-detail-label">Email</span>
+          <span class="drawer-detail-value" id="mDetailEmail">--</span>
+        </div>
+      </div>
+      <div class="drawer-actions">
+        <a href="#" id="mDetailCallBtn" class="btn-drawer btn-drawer-success">
+          <i class="fas fa-phone-alt"></i> Call
+        </a>
+        <button id="mDetailSmsBtn" class="btn-drawer btn-drawer-primary">
+          <i class="fas fa-comment"></i> SMS
+        </button>
+        <button id="mDetailEditBtn" class="btn-drawer btn-drawer-outline">
+          <i class="fas fa-edit"></i> Edit
+        </button>
+        <button id="mDetailAssignBtn" class="btn-drawer btn-drawer-accent">
+          <i class="fas fa-bed"></i> Room
+        </button>
+      </div>
+    </div>
+  </div>
 
+  <script>
     function toggleSidebar() {
       document.querySelector('.sidebar').classList.toggle('open');
       const overlay = document.querySelector('.sidebar-overlay');
@@ -1306,25 +1340,23 @@
             }
 
             if(data.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;">No receipts found.</td></tr>';
+                if (tbody) tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;">No receipts found.</td></tr>';
             } else {
-                data.forEach(r => {
-                    // Use parseFloat to properly sum amounts and avoid string concatenation
-                    totalCollected += parseFloat(r.amount) || 0;
-
-                    const tr = document.createElement('tr');
-                    tr.innerHTML = `
-                        <td><strong>${r.receipt_number}</strong></td>
-                        <td>${new Date(r.created_at).toLocaleString()}</td>
-                        <td>${r.student_name} <br><small>ID: ${r.student_id} | Room: ${r.room_number || 'N/A'}</small></td>
-                        <td style="color:green; font-weight:bold;">₹${r.amount}</td>
-                        <td>${r.payment_type} <br><small>${r.payment_mode} | ${r.period}</small></td>
-                        <td>
-                            <button onclick="window.open('/api/receipts/download/${r.id}', '_blank')" class="btn btn-primary btn-sm">PDF</button>
-                            <button onclick='editReceipt(${JSON.stringify(r)})' class="btn btn-warning btn-sm">Edit</button>
-                            <button onclick="deleteReceipt(${r.id})" class="btn btn-danger btn-sm">Delete</button>
-                        </td>
-                    `;
+            data.forEach(r => {
+                totalCollected += parseFloat(r.amount) || 0;
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td><strong>${r.receipt_number}</strong></td>
+                    <td>${new Date(r.created_at).toLocaleString()}</td>
+                    <td>${r.student_name} <br><small>ID: ${r.student_id} | Room: ${r.room_number || 'N/A'}</small></td>
+                    <td style="color:green; font-weight:bold;">₹${r.amount}</td>
+                    <td>${r.payment_type} <br><small>${r.payment_mode} | ${r.period}</small></td>
+                    <td>
+                        <button onclick="window.open('/api/receipts/download/${r.id}', '_blank')" class="btn btn-primary btn-sm">PDF</button>
+                        <button onclick='editReceipt(${JSON.stringify(r)})' class="btn btn-warning btn-sm">Edit</button>
+                        <button onclick="deleteReceipt(${r.id})" class="btn btn-danger btn-sm">Delete</button>
+                    </td>
+                `;
                     if (tbody) tbody.appendChild(tr);
                 });
             }
@@ -1464,6 +1496,68 @@
     // Update immediately, then every second
     updateLiveTime();
     setInterval(updateLiveTime, 1000);
+    // ---- Mobile Students Logic ----
+    function filterStudents() {
+      const q = document.getElementById('studentSearchInput').value.toLowerCase();
+      const rows = document.querySelectorAll('.student-row');
+      
+      const activeFilter = document.querySelector('.filter-chip.active');
+      let type = 'all';
+      if (activeFilter) {
+        type = activeFilter.getAttribute('data-filter');
+      }
+
+      rows.forEach(r => {
+        const name = r.getAttribute('data-name') || '';
+        const roll = r.getAttribute('data-roll') || '';
+        const email = r.getAttribute('data-email') || '';
+        const course = r.getAttribute('data-course') || '';
+        const room = r.getAttribute('data-room');
+
+        const matchText = name.includes(q) || roll.includes(q) || email.includes(q) || course.includes(q);
+        
+        let matchFilter = true;
+        if (type === 'assigned' && !room) matchFilter = false;
+        if (type === 'unassigned' && room) matchFilter = false;
+
+        r.style.display = (matchText && matchFilter) ? '' : 'none';
+      });
+    }
+
+    function setStudentFilter(type, el) {
+      document.querySelectorAll('.filter-chip').forEach(c => c.classList.remove('active'));
+      el.classList.add('active');
+      el.setAttribute('data-filter', type);
+      filterStudents();
+    }
+
+    function openMobileStudentDetail(id, name, roll, phone, email, course, roomStr, roomId, year) {
+      document.getElementById('mDetailName').innerText = name;
+      document.getElementById('mDetailAvatar').innerText = name ? name.charAt(0).toUpperCase() : '?';
+      document.getElementById('mDetailSub').innerText = roll + (course !== 'N/A' ? ' • ' + course : '');
+      document.getElementById('mDetailPhone').innerText = phone;
+      document.getElementById('mDetailRoom').innerText = roomStr;
+      document.getElementById('mDetailEmail').innerText = email;
+
+      document.getElementById('mDetailCallBtn').href = `tel:${phone}`;
+      
+      document.getElementById('mDetailSmsBtn').onclick = () => {
+        closeModal('mobileStudentDetailModal');
+        openSendSMS(id, name);
+      };
+      
+      document.getElementById('mDetailEditBtn').onclick = () => {
+        closeModal('mobileStudentDetailModal');
+        openEditStudentDetails(id, name, email, course, year);
+      };
+      
+      document.getElementById('mDetailAssignBtn').onclick = () => {
+        closeModal('mobileStudentDetailModal');
+        openAssignRoom(id, name, roomId);
+      };
+
+      document.getElementById('mobileStudentDetailModal').classList.add('open');
+    }
   </script>
 </body>
 </html>
