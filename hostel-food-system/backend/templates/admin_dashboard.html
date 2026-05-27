@@ -1407,6 +1407,26 @@
             loadReceipts();
         }
     };
+
+    // ---- Live Clock Logic ----
+    function updateLiveTime() {
+      const timeElement = document.getElementById('liveTime');
+      if (timeElement) {
+        const now = new Date();
+        const options = { 
+          timeZone: 'Asia/Kolkata',
+          hour: '2-digit', 
+          minute: '2-digit', 
+          second: '2-digit', 
+          hour12: true 
+        };
+        // Use en-US to ensure AM/PM is formatted nicely
+        timeElement.textContent = now.toLocaleTimeString('en-US', options);
+      }
+    }
+    // Update immediately, then every second
+    updateLiveTime();
+    setInterval(updateLiveTime, 1000);
   </script>
 </body>
 </html>
