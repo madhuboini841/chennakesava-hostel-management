@@ -224,14 +224,54 @@ def auto_backup_db():
     except Exception as e:
         print(f"[BACKUP ERROR] Failed to create backup: {e}")
 
-# Start scheduler
+import platform
+
+# Start scheduler safely to avoid Gunicorn worker deadlocks / duplicate instances
 scheduler = BackgroundScheduler()
 scheduler.add_job(check_and_send_due_date_reminders, 'cron', hour=8, minute=0)
 scheduler.add_job(lock_menus, 'cron', hour=7, minute=0, args=[['breakfast']])
 scheduler.add_job(lock_menus, 'cron', hour=10, minute=0, args=[['lunch', 'dinner']])
 scheduler.add_job(send_food_reminder, 'cron', hour=6, minute=0)
 scheduler.add_job(auto_backup_db, 'cron', hour=23, minute=59)
-scheduler.start()
+
+if os.getenv("DISABLE_SCHEDULER", "false").lower() != "true":
+    if platform.system() != 'Windows':
+        import fcntl
+        try:
+            # Try to grab a file lock. Only one Gunicorn worker will succeed.
+            scheduler_lock_file = open("/tmp/scheduler.lock", "w")
+            fcntl.lockf(scheduler_lock_file, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            scheduler.start()
+            print("[INFO] BackgroundScheduler started in this worker.")
+        except BlockingIOError:
+            print("[INFO] BackgroundScheduler already running in another worker.")
+    else:
+        # Local Windows development
+        scheduler.start()
+        print("[INFO] BackgroundScheduler started locally.")
+
+# ============================================================
+# CRON ENDPOINTS (For use with external cron-job.org if internal scheduler is disabled)
+# ============================================================
+@app.route('/cron/daily-reminders')
+def cron_daily_reminders():
+    check_and_send_due_date_reminders()
+    return "Reminders executed", 200
+
+@app.route('/cron/lock-breakfast')
+def cron_lock_breakfast():
+    lock_menus(['breakfast'])
+    return "Breakfast locked", 200
+
+@app.route('/cron/lock-lunch-dinner')
+def cron_lock_lunch_dinner():
+    lock_menus(['lunch', 'dinner'])
+    return "Lunch & Dinner locked", 200
+
+@app.route('/cron/food-reminder')
+def cron_food_reminder():
+    send_food_reminder()
+    return "Food reminder sent", 200
 
 # ============================================================
 # DATABASE CONFIGURATION
