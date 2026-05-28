@@ -989,6 +989,21 @@ def student_dashboard():
     optout = cursor.fetchone()
     if not optout:
         optout = {'breakfast': 0, 'lunch': 0, 'dinner': 0, 'reason': ''}
+        
+    # 3. Fetch Active Kitchen Announcements
+    try:
+        cursor.execute("SELECT * FROM kitchen_announcements WHERE is_active = TRUE ORDER BY created_at DESC LIMIT 5")
+        kitchen_announcements = cursor.fetchall()
+    except psycopg2.Error:
+        kitchen_announcements = []
+
+    # 4. Fetch User's feedback for today
+    try:
+        cursor.execute("SELECT meal_slot, rating, like_status, comment FROM meal_feedback WHERE student_id = %s AND date = %s", (session['user_id'], today_str))
+        feedbacks_raw = cursor.fetchall()
+        feedbacks = {f['meal_slot']: f for f in feedbacks_raw}
+    except psycopg2.Error:
+        feedbacks = {}
 
     # Calculate days in hostel
     days_in_hostel = 0
@@ -1011,7 +1026,9 @@ def student_dashboard():
                            todays_menu=todays_menu,
                            optout=optout,
                            today_str=today_str,
-                           days_in_hostel=days_in_hostel)
+                           days_in_hostel=days_in_hostel,
+                           kitchen_announcements=kitchen_announcements,
+                           feedbacks=feedbacks)
 
 # ============================================================
 # ROUTE: Add Food Opt-out (Student)
@@ -1281,6 +1298,30 @@ def admin_dashboard():
     cursor.execute("SELECT * FROM daily_menus WHERE date = %s", (today_str,))
     todays_menu = cursor.fetchall()
 
+    # Kitchen Announcements
+    try:
+        cursor.execute("SELECT * FROM kitchen_announcements ORDER BY created_at DESC LIMIT 10")
+        kitchen_announcements = cursor.fetchall()
+    except psycopg2.Error:
+        kitchen_announcements = []
+
+    # Student Feedbacks
+    try:
+        cursor.execute("""
+            SELECT f.*, s.name 
+            FROM meal_feedback f 
+            JOIN students s ON f.student_id = s.id 
+            ORDER BY f.created_at DESC LIMIT 20
+        """)
+        recent_feedbacks = cursor.fetchall()
+        
+        cursor.execute("SELECT AVG(rating) as avg_rating FROM meal_feedback WHERE rating IS NOT NULL")
+        row = cursor.fetchone()
+        avg_rating = round(row['avg_rating'], 1) if row and row['avg_rating'] else 0.0
+    except psycopg2.Error:
+        recent_feedbacks = []
+        avg_rating = 0.0
+
     cursor.close()
     conn.close()
 
@@ -1304,7 +1345,10 @@ def admin_dashboard():
                            todays_menu=todays_menu,
                            optouts=optouts,
                            expected_counts=expected_counts,
-                           today_str=today_str)
+                           today_str=today_str,
+                           kitchen_announcements=kitchen_announcements,
+                           recent_feedbacks=recent_feedbacks,
+                           avg_rating=avg_rating)
 
 # ============================================================
 # ROUTE: Update Food Menu (Admin)
@@ -2697,6 +2741,99 @@ def api_student_receipts():
         if r.get('created_at'): r['created_at'] = r['created_at'].strftime('%Y-%m-%d %H:%M:%S')
     conn.close()
     return jsonify(receipts)
+
+# ============================================================
+# ROUTE: Student Food Feedback
+# ============================================================
+@app.route('/student/food/feedback', methods=['POST'])
+def student_food_feedback():
+    if not is_student():
+        return jsonify({'error': 'Unauthorized'}), 401
+    
+    date_str = request.form.get('date')
+    meal_slot = request.form.get('meal_slot')
+    rating = request.form.get('rating')
+    like_status = request.form.get('like_status')
+    comment = request.form.get('comment', '')
+
+    if not date_str or not meal_slot:
+        flash("Missing data", "error")
+        return redirect(url_for('student_dashboard') + '#food')
+
+    rating = int(rating) if rating and rating.isdigit() else None
+    
+    conn = get_db()
+    cursor = conn.cursor()
+    try:
+        # Upsert feedback
+        cursor.execute("""
+            INSERT INTO meal_feedback (student_id, date, meal_slot, rating, like_status, comment)
+            VALUES (%s, %s, %s, %s, %s, %s)
+            ON CONFLICT (student_id, date, meal_slot) 
+            DO UPDATE SET rating=EXCLUDED.rating, like_status=EXCLUDED.like_status, comment=EXCLUDED.comment
+        """, (session['user_id'], date_str, meal_slot, rating, like_status, comment))
+        conn.commit()
+        flash("Feedback submitted. Thank you!", "success")
+    except psycopg2.Error as e:
+        conn.rollback()
+        flash("Failed to submit feedback.", "error")
+    finally:
+        cursor.close()
+        conn.close()
+        
+    return redirect(url_for('student_dashboard') + '#food')
+
+# ============================================================
+# ROUTE: Admin Food Announcements
+# ============================================================
+@app.route('/admin/food/announcements/add', methods=['POST'])
+def admin_food_announcements_add():
+    if not is_admin():
+        return jsonify({'error': 'Unauthorized'}), 401
+        
+    title = request.form.get('title')
+    content = request.form.get('content')
+    atype = request.form.get('type', 'update')
+    
+    if not title:
+        flash("Title is required", "error")
+        return redirect(url_for('admin_dashboard') + '#food')
+        
+    conn = get_db()
+    cursor = conn.cursor()
+    try:
+        cursor.execute("INSERT INTO kitchen_announcements (title, content, type) VALUES (%s, %s, %s)", 
+                      (title, content, atype))
+        conn.commit()
+        flash("Announcement added successfully!", "success")
+    except psycopg2.Error:
+        conn.rollback()
+        flash("Error adding announcement.", "error")
+    finally:
+        cursor.close()
+        conn.close()
+        
+    return redirect(url_for('admin_dashboard') + '#food')
+
+@app.route('/admin/food/announcements/delete/<int:id>', methods=['POST'])
+def admin_food_announcements_delete(id):
+    if not is_admin():
+        return jsonify({'error': 'Unauthorized'}), 401
+        
+    conn = get_db()
+    cursor = conn.cursor()
+    try:
+        cursor.execute("DELETE FROM kitchen_announcements WHERE id = %s", (id,))
+        conn.commit()
+        flash("Announcement deleted.", "success")
+    except psycopg2.Error:
+        conn.rollback()
+        flash("Error deleting announcement.", "error")
+    finally:
+        cursor.close()
+        conn.close()
+        
+    return redirect(url_for('admin_dashboard') + '#food')
 
 # ============================================================
 # DIAGNOSTIC ROUTE FOR EMAIL BUG

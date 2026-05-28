@@ -455,70 +455,160 @@
 
         <!-- ===== TAB: FOOD & MEALS ===== -->
         <div id="tab-food" class="tab-section" style="display:none">
-          <div class="two-col">
-            <!-- Today's Menu -->
-            <div class="card">
-              <div class="card-header">
-                <div class="card-title">🍽️ Today's Menu ({{ today_str }})</div>
-              </div>
-              <div class="card-body">
-                {% if todays_menu %}
-                  <div style="display: flex; flex-direction: column; gap: 10px;">
-                  {% for m in todays_menu %}
-                    <div style="padding: 12px; border-left: 4px solid var(--primary); background: #f9f9ff; border-radius: 4px;">
-                      <div style="font-weight: 800; font-size: 14px; text-transform: uppercase; margin-bottom: 4px;">{{ m['meal_slot'] }} ({{ m['meal_type']|title }})</div>
-                      <div style="font-size: 13px; color: #555;">{{ m['items'] }}</div>
+          
+          <!-- Announcements & Specials -->
+          {% if kitchen_announcements %}
+          <div class="announcement-ticker">
+            <div class="ticker-label">📢 Updates</div>
+            <div class="ticker-content">
+              <marquee scrollamount="5" scrolldelay="50" onmouseover="this.stop();" onmouseout="this.start();">
+                {% for ann in kitchen_announcements %}
+                  <span style="margin-right: 40px;">
+                    {% if ann.type == 'special_meal' %}🌟 <strong>Special:</strong> {% elif ann.type == 'festival' %}🎉 <strong>Festival:</strong> {% endif %}
+                    {{ ann.title }} - <span style="opacity:0.8;font-size:0.9em;">{{ ann.content }}</span>
+                  </span>
+                {% endfor %}
+              </marquee>
+            </div>
+          </div>
+          {% endif %}
+
+          <div class="food-dashboard-grid">
+            <!-- Left/Top: Meal Cards -->
+            <div class="meal-cards-container">
+              <h3 class="section-title">Today's Menu</h3>
+              
+              {% set meal_slots = ['breakfast', 'lunch', 'dinner'] %}
+              {% set slot_icons = {'breakfast': '🍳', 'lunch': '🍛', 'dinner': '🍲'} %}
+              {% set slot_times = {'breakfast': '7:30 AM - 9:00 AM', 'lunch': '12:30 PM - 2:00 PM', 'dinner': '7:30 PM - 9:00 PM'} %}
+              
+              {% for slot in meal_slots %}
+                {% set menu_item = todays_menu | selectattr('meal_slot', 'equalto', slot) | first %}
+                {% set feedback = feedbacks.get(slot) %}
+                
+                <div class="meal-card {% if menu_item %}active{% else %}inactive{% endif %}">
+                  <div class="meal-card-header">
+                    <div class="meal-icon">{{ slot_icons[slot] }}</div>
+                    <div class="meal-title-area">
+                      <h4>{{ slot | title }}</h4>
+                      <span class="meal-time">🕒 {{ slot_times[slot] }}</span>
                     </div>
-                  {% endfor %}
+                    {% if menu_item %}
+                      <span class="veg-badge badge-{{ 'success' if menu_item.meal_type == 'veg' else 'danger' }}">
+                        {{ '🟢 Veg' if menu_item.meal_type == 'veg' else '🔴 Non-Veg' }}
+                      </span>
+                    {% endif %}
                   </div>
-                {% else %}
-                  <div class="empty-state">
-                    <div class="icon">🍳</div>
-                    <p>Menu hasn't been posted for today yet.</p>
+                  
+                  <div class="meal-card-body">
+                    {% if menu_item %}
+                      <p class="meal-items">{{ menu_item.items }}</p>
+                    {% else %}
+                      <p class="meal-items empty">Menu not posted yet.</p>
+                    {% endif %}
                   </div>
-                {% endif %}
-              </div>
+                  
+                  {% if menu_item %}
+                  <div class="meal-card-footer">
+                    <button type="button" class="btn btn-sm btn-outline btn-feedback-toggle" onclick="toggleFeedbackForm('{{ slot }}')">
+                      {% if feedback %}⭐ Update Feedback{% else %}⭐ Rate Meal{% endif %}
+                    </button>
+                    
+                    <form class="feedback-form" id="feedback-form-{{ slot }}" style="display:none;" method="POST" action="/student/food/feedback">
+                      <input type="hidden" name="date" value="{{ today_str }}">
+                      <input type="hidden" name="meal_slot" value="{{ slot }}">
+                      
+                      <div class="feedback-rating">
+                        <label>Rating:</label>
+                        <div class="star-rating">
+                          {% for i in range(5, 0, -1) %}
+                            <input type="radio" id="star{{ i }}-{{ slot }}" name="rating" value="{{ i }}" {% if feedback and feedback.rating == i %}checked{% endif %}>
+                            <label for="star{{ i }}-{{ slot }}" title="{{ i }} stars">★</label>
+                          {% endfor %}
+                        </div>
+                      </div>
+                      
+                      <div class="feedback-likes">
+                        <label>
+                          <input type="radio" name="like_status" value="like" {% if feedback and feedback.like_status == 'like' %}checked{% endif %}> 👍 Like
+                        </label>
+                        <label>
+                          <input type="radio" name="like_status" value="dislike" {% if feedback and feedback.like_status == 'dislike' %}checked{% endif %}> 👎 Dislike
+                        </label>
+                      </div>
+                      
+                      <textarea name="comment" placeholder="Optional comments..." rows="2">{{ feedback.comment if feedback else '' }}</textarea>
+                      <button type="submit" class="btn btn-sm btn-primary">Submit Feedback</button>
+                    </form>
+                  </div>
+                  {% endif %}
+                </div>
+              {% endfor %}
             </div>
 
-            <!-- Opt-out Form -->
-            <div class="card">
-              <div class="card-header">
-                <div class="card-title">🚫 Daily Meal Opt-Out</div>
-              </div>
-              <div class="card-body">
-                <div style="background:var(--warning-light); color:var(--warning-dark); padding:10px; border-radius:4px; font-size:12px; margin-bottom:16px;">
-                  <strong>Deadline Rules:</strong> You can only opt-out of Breakfast before <strong>7 AM</strong>, and Lunch/Dinner before <strong>10 AM</strong>.
+            <!-- Right/Bottom: Opt-out Form -->
+            <div class="optout-container">
+              <div class="card premium-card">
+                <div class="card-header">
+                  <div class="card-title">🚫 Meal Opt-Out</div>
+                  <p style="font-size: 12px; color: var(--text-light); margin-top: 5px;">
+                    Cutoffs: Breakfast by 7 AM, Lunch/Dinner by 10 AM.
+                  </p>
                 </div>
-                
-                <form method="POST" action="/student/food/optout">
-                  <input type="hidden" name="date" value="{{ today_str }}">
-                  
-                  <div style="margin-bottom: 16px;">
-                    <label style="display:flex; align-items:center; gap:8px; margin-bottom:10px; font-weight:600; font-size:14px; cursor:pointer;">
-                      <input type="checkbox" name="skip_breakfast" value="1" {% if optout.breakfast %}checked{% endif %}>
-                      Skip Breakfast
-                    </label>
-                    <label style="display:flex; align-items:center; gap:8px; margin-bottom:10px; font-weight:600; font-size:14px; cursor:pointer;">
-                      <input type="checkbox" name="skip_lunch" value="1" {% if optout.lunch %}checked{% endif %}>
-                      Skip Lunch
-                    </label>
-                    <label style="display:flex; align-items:center; gap:8px; margin-bottom:10px; font-weight:600; font-size:14px; cursor:pointer;">
-                      <input type="checkbox" name="skip_dinner" value="1" {% if optout.dinner %}checked{% endif %}>
-                      Skip Dinner
-                    </label>
-                  </div>
-                  
-                  <div class="form-group">
-                    <label>Reason (Optional)</label>
-                    <input type="text" name="reason" value="{{ optout.reason }}" placeholder="Going home, outside, fasting, etc.">
-                  </div>
-                  
-                  <button type="submit" class="btn btn-primary" style="width:100%">
-                    💾 Save Opt-Out Preferences
-                  </button>
-                </form>
+                <div class="card-body">
+                  <form method="POST" action="/student/food/optout" id="optoutForm">
+                    <input type="hidden" name="date" value="{{ today_str }}">
+                    
+                    <div class="toggle-cards-group">
+                      <label class="toggle-card">
+                        <div class="toggle-info">
+                          <span class="toggle-title">Skip Breakfast</span>
+                        </div>
+                        <div class="toggle-switch">
+                          <input type="checkbox" name="skip_breakfast" value="1" {% if optout.breakfast %}checked{% endif %}>
+                          <span class="slider"></span>
+                        </div>
+                      </label>
+                      
+                      <label class="toggle-card">
+                        <div class="toggle-info">
+                          <span class="toggle-title">Skip Lunch</span>
+                        </div>
+                        <div class="toggle-switch">
+                          <input type="checkbox" name="skip_lunch" value="1" {% if optout.lunch %}checked{% endif %}>
+                          <span class="slider"></span>
+                        </div>
+                      </label>
+                      
+                      <label class="toggle-card">
+                        <div class="toggle-info">
+                          <span class="toggle-title">Skip Dinner</span>
+                        </div>
+                        <div class="toggle-switch">
+                          <input type="checkbox" name="skip_dinner" value="1" {% if optout.dinner %}checked{% endif %}>
+                          <span class="slider"></span>
+                        </div>
+                      </label>
+                    </div>
+                    
+                    <div class="form-group" style="margin-top: 20px;">
+                      <label>Reason for skipping (Optional)</label>
+                      <div class="quick-reasons" style="margin-bottom: 8px; display:flex; gap:8px; flex-wrap:wrap;">
+                        <span class="pill-btn" onclick="document.getElementById('optoutReason').value='Going Home'">🏠 Going Home</span>
+                        <span class="pill-btn" onclick="document.getElementById('optoutReason').value='Fasting'">🕌 Fasting</span>
+                        <span class="pill-btn" onclick="document.getElementById('optoutReason').value='Eating Outside'">🍔 Eating Outside</span>
+                      </div>
+                      <input type="text" id="optoutReason" name="reason" value="{{ optout.reason }}" placeholder="Type reason here...">
+                    </div>
+                    
+                    <button type="submit" class="btn btn-primary btn-full">
+                      💾 Save Preferences
+                    </button>
+                  </form>
+                </div>
               </div>
             </div>
+            
           </div>
         </div>
 
@@ -582,6 +672,15 @@
       const f = document.getElementById('flashMessages');
       if (f) { f.style.opacity = '0'; f.style.transition = 'opacity 0.5s'; setTimeout(() => f.remove(), 500); }
     }, 4000);
+
+    function toggleFeedbackForm(slot) {
+      const form = document.getElementById('feedback-form-' + slot);
+      if (form.style.display === 'none' || form.style.display === '') {
+        form.style.display = 'block';
+      } else {
+        form.style.display = 'none';
+      }
+    }
   </script>
 </body>
 </html>

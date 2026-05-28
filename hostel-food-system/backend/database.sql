@@ -276,3 +276,34 @@ ALTER TABLE students ADD COLUMN IF NOT EXISTS reset_token VARCHAR(255);
 ALTER TABLE students ADD COLUMN IF NOT EXISTS reset_token_expiry TIMESTAMP;
 ALTER TABLE students ADD COLUMN IF NOT EXISTS must_change_password BOOLEAN DEFAULT FALSE;
 ALTER TABLE sms_logs ADD COLUMN IF NOT EXISTS error_message TEXT;
+
+-- ============================================================
+-- Table: meal_feedback
+-- Tracks student ratings and feedback for meals
+-- ============================================================
+CREATE TABLE IF NOT EXISTS meal_feedback (
+    id SERIAL PRIMARY KEY,
+    student_id INT NOT NULL,
+    date DATE NOT NULL,
+    meal_slot VARCHAR(50) NOT NULL,
+    rating INT,
+    like_status VARCHAR(20),
+    comment TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY(student_id) REFERENCES students(id) ON DELETE CASCADE,
+    UNIQUE (student_id, date, meal_slot)
+);
+
+-- ============================================================
+-- Table: kitchen_announcements
+-- Tracks special meals and kitchen announcements
+-- ============================================================
+CREATE TABLE IF NOT EXISTS kitchen_announcements (
+    id SERIAL PRIMARY KEY,
+    title VARCHAR(200) NOT NULL,
+    content TEXT,
+    type VARCHAR(50) DEFAULT 'update', 
+    is_active BOOLEAN DEFAULT TRUE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+

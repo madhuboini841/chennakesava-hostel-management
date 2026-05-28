@@ -980,15 +980,15 @@
 
         <!-- ===== SECTION: FOOD ===== -->
         <div id="section-food" class="dashboard-section" style="display:none">
-          <!-- Stats Grid -->
+          
+          <!-- Top Analytics Cards -->
           <div class="stats-grid" style="margin-bottom: 20px;">
             <div class="stat-card" style="border-left: 4px solid #3b82f6;">
               <div class="stat-icon blue">🍳</div>
               <div class="stat-info">
                 <div class="value">{{ expected_counts.breakfast.veg + expected_counts.breakfast.nonveg }}</div>
                 <div class="label">Expected Breakfast</div>
-                <div style="font-size:11px;color:#777">V: {{ expected_counts.breakfast.veg }} | NV: {{
-                  expected_counts.breakfast.nonveg }} ({{ expected_counts.breakfast.opt }} opted out)</div>
+                <div style="font-size:11px;color:#777">V: {{ expected_counts.breakfast.veg }} | NV: {{ expected_counts.breakfast.nonveg }} ({{ expected_counts.breakfast.opt }} opted out)</div>
               </div>
             </div>
             <div class="stat-card" style="border-left: 4px solid #f97316;">
@@ -996,8 +996,7 @@
               <div class="stat-info">
                 <div class="value">{{ expected_counts.lunch.veg + expected_counts.lunch.nonveg }}</div>
                 <div class="label">Expected Lunch</div>
-                <div style="font-size:11px;color:#777">V: {{ expected_counts.lunch.veg }} | NV: {{
-                  expected_counts.lunch.nonveg }} ({{ expected_counts.lunch.opt }} opted out)</div>
+                <div style="font-size:11px;color:#777">V: {{ expected_counts.lunch.veg }} | NV: {{ expected_counts.lunch.nonveg }} ({{ expected_counts.lunch.opt }} opted out)</div>
               </div>
             </div>
             <div class="stat-card" style="border-left: 4px solid #8b5cf6;">
@@ -1005,132 +1004,205 @@
               <div class="stat-info">
                 <div class="value">{{ expected_counts.dinner.veg + expected_counts.dinner.nonveg }}</div>
                 <div class="label">Expected Dinner</div>
-                <div style="font-size:11px;color:#777">V: {{ expected_counts.dinner.veg }} | NV: {{
-                  expected_counts.dinner.nonveg }} ({{ expected_counts.dinner.opt }} opted out)</div>
+                <div style="font-size:11px;color:#777">V: {{ expected_counts.dinner.veg }} | NV: {{ expected_counts.dinner.nonveg }} ({{ expected_counts.dinner.opt }} opted out)</div>
+              </div>
+            </div>
+            <div class="stat-card" style="border-left: 4px solid #eab308;">
+              <div class="stat-icon" style="background:#fef08a;color:#ca8a04;">⭐</div>
+              <div class="stat-info">
+                <div class="value">{{ avg_rating }}</div>
+                <div class="label">Avg Food Rating</div>
+                <div style="font-size:11px;color:#777">Based on student feedback</div>
               </div>
             </div>
           </div>
 
-          <div class="two-col">
-            <!-- Composer -->
-            <div class="card">
-              <div class="card-header">
-                <div class="card-title">📝 Compose Menu ({{ today_str }})</div>
-              </div>
-              <div class="card-body">
-                <form method="POST" action="/admin/food/menu">
-                  <input type="hidden" name="date" value="{{ today_str }}">
-                  <div class="form-row">
-                    <div class="form-group">
-                      <label>Meal Slot</label>
-                      <select name="meal_slot">
-                        <option value="breakfast">Breakfast</option>
-                        <option value="lunch">Lunch</option>
-                        <option value="dinner">Dinner</option>
-                      </select>
-                    </div>
-                    <div class="form-group">
-                      <label>Meal Type</label>
-                      <select name="meal_type">
-                        <option value="veg">Veg</option>
-                        <option value="non-veg">Non-Veg</option>
-                      </select>
-                    </div>
-                  </div>
-                  <div class="form-group">
-                    <label>Menu Items (comma separated)</label>
-                    <textarea name="items" rows="3" required placeholder="e.g. Rice, Dal, Mixed Sabzi"></textarea>
-                  </div>
-                  <button type="submit" class="btn btn-primary" style="width:100%">💾 Save Menu</button>
-                </form>
-
-                <div style="margin-top: 20px; border-top: 1px solid #eee; padding-top: 15px;">
-                  <h4 style="margin-bottom: 10px; font-size: 14px;">Today's Set Menus</h4>
-                  {% if todays_menu %}
-                  {% for m in todays_menu %}
-                  <div
-                    style="font-size: 13px; background: #f9f9ff; padding: 8px; border-radius: 4px; border-left: 3px solid var(--accent); margin-bottom: 6px;">
-                    <div style="display:flex; justify-content:space-between; align-items:center;">
-                      <div>
-                        <strong>{{ m.meal_slot|title }} ({{ m.meal_type|title }})</strong>: {{ m['items'] }}
-                        {% if m.is_locked %}<span class="badge badge-danger"
-                          style="font-size:9px; margin-left:5px;">LOCKED</span>{% endif %}
+          <div class="admin-food-grid">
+            <!-- Left Column: Manage & Compose -->
+            <div class="admin-food-col">
+              <div class="card premium-card">
+                <div class="card-header">
+                  <div class="card-title">📝 Compose Menu</div>
+                </div>
+                <div class="card-body">
+                  <form method="POST" action="/admin/food/menu">
+                    <input type="hidden" name="date" value="{{ today_str }}">
+                    <div class="form-row">
+                      <div class="form-group">
+                        <label>Meal Slot</label>
+                        <select name="meal_slot" class="premium-select">
+                          <option value="breakfast">Breakfast</option>
+                          <option value="lunch">Lunch</option>
+                          <option value="dinner">Dinner</option>
+                        </select>
                       </div>
+                      <div class="form-group">
+                        <label>Meal Type</label>
+                        <select name="meal_type" class="premium-select">
+                          <option value="veg">Veg</option>
+                          <option value="non-veg">Non-Veg</option>
+                        </select>
+                      </div>
+                    </div>
+                    <div class="form-group">
+                      <label>Menu Items</label>
+                      <textarea name="items" rows="3" required placeholder="e.g. Rice, Dal, Mixed Sabzi"></textarea>
+                    </div>
+                    <button type="submit" class="btn btn-primary btn-full">💾 Save Menu</button>
+                  </form>
+                </div>
+              </div>
+
+              <div class="card premium-card" style="margin-top: 15px;">
+                <div class="card-header">
+                  <div class="card-title">📢 Post Announcement</div>
+                </div>
+                <div class="card-body">
+                  <form method="POST" action="/admin/food/announcements/add">
+                    <div class="form-group">
+                      <label>Type</label>
+                      <select name="type" class="premium-select">
+                        <option value="special_meal">🌟 Special Meal</option>
+                        <option value="festival">🎉 Festival</option>
+                        <option value="update">📢 Kitchen Update</option>
+                      </select>
+                    </div>
+                    <div class="form-group">
+                      <label>Title</label>
+                      <input type="text" name="title" required placeholder="e.g. Sunday Biryani">
+                    </div>
+                    <div class="form-group">
+                      <label>Description (Optional)</label>
+                      <input type="text" name="content" placeholder="e.g. Extra raita will be served">
+                    </div>
+                    <button type="submit" class="btn btn-accent btn-full">Post Announcement</button>
+                  </form>
+                </div>
+              </div>
+            </div>
+
+            <!-- Center Column: Active Menus & Announcements -->
+            <div class="admin-food-col">
+              <div class="card">
+                <div class="card-header">
+                  <div class="card-title">🍲 Today's Active Menus</div>
+                </div>
+                <div class="card-body" style="padding: 10px;">
+                  {% if todays_menu %}
+                    {% for m in todays_menu %}
+                    <div class="modern-menu-item">
+                      <div class="menu-item-header">
+                        <span class="slot-badge">{{ m.meal_slot|title }} ({{ m.meal_type|title }})</span>
+                        {% if m.is_locked %}<span class="badge badge-danger" style="font-size:9px;">LOCKED</span>{% endif %}
+                      </div>
+                      <div class="menu-item-content">{{ m['items'] }}</div>
+                      
                       {% if not m.is_locked %}
-                      <div style="display:flex; gap:5px;">
-                        <button class="btn btn-sm"
-                          style="padding: 2px 5px; font-size:11px; background:#e0e7ff; color:#3b82f6; border:none; cursor:pointer;"
-                          onclick="document.getElementById('editMenu{{ m.id }}').style.display='block'">Edit</button>
-                        <form action="/admin/food/menu/delete/{{ m.id }}" method="POST" style="margin:0;"
-                          onsubmit="return confirm('Delete this menu?')">
-                          <button type="submit" class="btn btn-sm"
-                            style="padding: 2px 5px; font-size:11px; background:#fee2e2; color:#ef4444; border:none; cursor:pointer;">Delete</button>
+                      <div class="menu-item-actions">
+                        <button class="btn btn-sm btn-outline" onclick="document.getElementById('editMenu{{ m.id }}').style.display='block'">Edit</button>
+                        <form action="/admin/food/menu/delete/{{ m.id }}" method="POST" style="margin:0;" onsubmit="return confirm('Delete this menu?')">
+                          <button type="submit" class="btn btn-sm btn-danger-outline">Delete</button>
+                        </form>
+                      </div>
+                      
+                      <!-- Inline Edit -->
+                      <div id="editMenu{{ m.id }}" style="display:none; margin-top:10px;">
+                        <form action="/admin/food/menu/edit/{{ m.id }}" method="POST">
+                          <textarea name="items" rows="2" style="width:100%; border:1px solid #ccc; border-radius:4px; padding:5px; font-size:12px; margin-bottom:5px;">{{ m['items'] }}</textarea>
+                          <div style="display:flex; gap:5px; justify-content:flex-end;">
+                            <button type="button" class="btn btn-sm btn-outline" onclick="document.getElementById('editMenu{{ m.id }}').style.display='none'">Cancel</button>
+                            <button type="submit" class="btn btn-primary btn-sm">Save</button>
+                          </div>
                         </form>
                       </div>
                       {% endif %}
                     </div>
-
-                    {% if not m.is_locked %}
-                    <!-- Inline Edit Form (Added for updating food items text) -->
-                    <div id="editMenu{{ m.id }}"
-                      style="display:none; margin-top:10px; background:#fff; padding:10px; border:1px solid #e5e7eb; border-radius:4px;">
-                      <form action="/admin/food/menu/edit/{{ m.id }}" method="POST">
-                        <textarea name="items" rows="2"
-                          style="width:100%; border:1px solid #ccc; border-radius:4px; padding:5px; font-size:12px; margin-bottom:5px;">{{ m['items'] }}</textarea>
-                        <div style="display:flex; gap:5px; justify-content:flex-end;">
-                          <button type="button" class="btn btn-sm" style="background:#f1f5f9; color:#475569;"
-                            onclick="document.getElementById('editMenu{{ m.id }}').style.display='none'">Cancel</button>
-                          <button type="submit" class="btn btn-primary btn-sm">Save</button>
-                        </div>
-                      </form>
-                    </div>
-                    {% endif %}
-                  </div>
-                  {% endfor %}
+                    {% endfor %}
                   {% else %}
-                  <div style="font-size:12px; color:#888; font-style:italic;">No menus posted for today yet.</div>
+                    <div class="empty-state"><p>No menus posted for today.</p></div>
+                  {% endif %}
+                </div>
+              </div>
+
+              <div class="card" style="margin-top: 15px;">
+                <div class="card-header">
+                  <div class="card-title">📢 Active Announcements</div>
+                </div>
+                <div class="card-body" style="padding: 0;">
+                  {% if kitchen_announcements %}
+                    <ul class="announcement-list">
+                    {% for ann in kitchen_announcements %}
+                      <li>
+                        <div class="ann-icon">{% if ann.type == 'special_meal' %}🌟{% elif ann.type == 'festival' %}🎉{% else %}📢{% endif %}</div>
+                        <div class="ann-details">
+                          <strong>{{ ann.title }}</strong>
+                          <span>{{ ann.content }}</span>
+                        </div>
+                        <form action="/admin/food/announcements/delete/{{ ann.id }}" method="POST" style="margin:0;">
+                          <button type="submit" class="btn-delete-icon" title="Delete">🗑️</button>
+                        </form>
+                      </li>
+                    {% endfor %}
+                    </ul>
+                  {% else %}
+                    <div class="empty-state" style="padding:15px;"><p>No active announcements.</p></div>
                   {% endif %}
                 </div>
               </div>
             </div>
 
-            <!-- Opt outs -->
-            <div class="card">
-              <div class="card-header">
-                <div class="card-title">📉 Today's Opt-Outs</div>
+            <!-- Right Column: Live Tracking & Feedback -->
+            <div class="admin-food-col">
+              <div class="card">
+                <div class="card-header">
+                  <div class="card-title">📉 Live Opt-Outs</div>
+                </div>
+                <div class="feed-container">
+                  {% for o in optouts if o.breakfast or o.lunch or o.dinner %}
+                  <div class="feed-item optout-item">
+                    <div class="feed-avatar">{{ o.name[:1] }}</div>
+                    <div class="feed-content">
+                      <div class="feed-title"><strong>{{ o.name }}</strong> ({{ o.meal_preference|title }})</div>
+                      <div class="feed-desc">
+                        Skipped:
+                        {% if o.breakfast %} [Breakfast]{% endif %}
+                        {% if o.lunch %} [Lunch]{% endif %}
+                        {% if o.dinner %} [Dinner]{% endif %}
+                      </div>
+                      {% if o.reason %}<div class="feed-reason">"{{ o.reason }}"</div>{% endif %}
+                    </div>
+                  </div>
+                  {% else %}
+                  <div class="empty-state"><p>No opt-outs today.</p></div>
+                  {% endfor %}
+                </div>
               </div>
-              <div class="table-wrap">
-                <table>
-                  <thead>
-                    <tr>
-                      <th>Student</th>
-                      <th>Pref</th>
-                      <th>Opted Out</th>
-                      <th>Reason</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {% for o in optouts if o.breakfast or o.lunch or o.dinner %}
-                    <tr>
-                      <td>{{ o.name }}<br><span style="font-size:10px;color:#777">{{ o.roll_number }}</span></td>
-                      <td><span class="badge badge-{% if o.meal_preference=='veg' %}success{%else%}danger{%endif%}">{{
-                          o.meal_preference|title }}</span></td>
-                      <td>
-                        <div style="font-size: 12px;">
-                          {% if o.breakfast %} [Breakfast]{% endif %}
-                          {% if o.lunch %} [Lunch]{% endif %}
-                          {% if o.dinner %} [Dinner]{% endif %}
-                        </div>
-                      </td>
-                      <td style="font-size: 11px;">{{ o.reason or '—' }}</td>
-                    </tr>
-                    {% else %}
-                    <tr>
-                      <td colspan="4" style="text-align:center;padding:30px;color:#999">No opt-outs today.</td>
-                    </tr>
-                    {% endfor %}
-                  </tbody>
-                </table>
+
+              <div class="card" style="margin-top: 15px;">
+                <div class="card-header">
+                  <div class="card-title">💬 Recent Feedback</div>
+                </div>
+                <div class="feed-container">
+                  {% for f in recent_feedbacks %}
+                  <div class="feed-item feedback-item">
+                    <div class="feed-avatar">{% if f.like_status == 'like' %}👍{% elif f.like_status == 'dislike' %}👎{% else %}⭐{% endif %}</div>
+                    <div class="feed-content">
+                      <div class="feed-title">
+                        <strong>{{ f.name }}</strong> on {{ f.meal_slot|title }}
+                      </div>
+                      <div class="feed-rating">
+                        {% if f.rating %}
+                          {% for i in range(f.rating) %}★{% endfor %}{% for i in range(5 - f.rating) %}☆{% endfor %}
+                        {% endif %}
+                      </div>
+                      {% if f.comment %}<div class="feed-reason">"{{ f.comment }}"</div>{% endif %}
+                      <div class="feed-date">{{ f.date.strftime('%b %d') if f.date else '' }}</div>
+                    </div>
+                  </div>
+                  {% else %}
+                  <div class="empty-state"><p>No feedback received yet.</p></div>
+                  {% endfor %}
+                </div>
               </div>
             </div>
           </div>
