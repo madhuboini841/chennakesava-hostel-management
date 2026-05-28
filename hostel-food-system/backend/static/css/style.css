@@ -2611,3 +2611,184 @@ tr.fee-row.fee-paid td:first-child { border-left-color: #10b981; }
 .pill-btn:hover {
   background: #cbd5e1;
 }
+
+/* ============================================================
+   FINANCE TRACKER REDESIGN
+   ============================================================ */
+
+/* KPI Cards Layout */
+.finance-stats {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 20px;
+  margin-bottom: 24px;
+}
+
+.fin-card {
+  background: white;
+  border-radius: 12px;
+  padding: 20px;
+  box-shadow: 0 4px 15px rgba(0,0,0,0.03);
+  border-top: 4px solid var(--primary);
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  overflow: hidden;
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+.fin-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 25px rgba(0,0,0,0.08);
+}
+
+.fin-card.income { border-top-color: #22c55e; }
+.fin-card.expense { border-top-color: #ef4444; }
+.fin-card.profit { border-top-color: #3b82f6; }
+
+.fin-card .label { 
+  font-size: 14px; 
+  font-weight: 600;
+  color: #64748b; 
+  margin-bottom: 8px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+.fin-card .value { 
+  font-size: 28px; 
+  font-weight: 800; 
+  color: #0f172a; 
+}
+
+/* Layout Container */
+.two-col-fin {
+  display: grid;
+  grid-template-columns: 1fr 350px;
+  gap: 20px;
+  align-items: start;
+}
+
+/* Chart Container Wrapper */
+.chart-wrapper {
+  position: relative;
+  height: 300px;
+  width: 100%;
+}
+
+/* Mobile Transaction Cards */
+.mobile-fin-cards {
+  display: none; /* Hidden on desktop */
+  flex-direction: column;
+  gap: 12px;
+}
+
+.fin-txn-card {
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 15px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.02);
+}
+
+.fin-txn-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px solid #f1f5f9;
+  padding-bottom: 8px;
+}
+
+.fin-txn-date {
+  font-size: 12px;
+  color: #64748b;
+  font-weight: 600;
+}
+
+.fin-txn-body {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.fin-txn-info {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.fin-txn-category {
+  font-weight: 700;
+  font-size: 15px;
+  color: #1e293b;
+}
+
+.fin-txn-remarks {
+  font-size: 12px;
+  color: #94a3b8;
+}
+
+.fin-txn-amount {
+  font-size: 18px;
+  font-weight: 800;
+}
+
+.fin-txn-amount.income {
+  color: #16a34a;
+}
+
+.fin-txn-amount.expense {
+  color: #dc2626;
+}
+
+.fin-txn-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+/* Finance Dashboard Header Fixes */
+.finance-header-actions {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+/* Responsive Overrides */
+@media (max-width: 992px) {
+  .two-col-fin { 
+    grid-template-columns: 1fr; 
+  }
+}
+
+@media (max-width: 768px) {
+  .finance-stats {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+  
+  .desktop-fin-table {
+    display: none;
+  }
+  
+  .mobile-fin-cards {
+    display: flex;
+  }
+
+  .top-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
+  }
+
+  .header-full-name {
+    display: none !important;
+  }
+
+  .finance-header-actions form {
+    width: 100%;
+    justify-content: space-between;
+  }
+}

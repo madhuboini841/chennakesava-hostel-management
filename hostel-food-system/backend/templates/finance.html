@@ -6,35 +6,6 @@
   <title>Finance Tracker — CBH</title>
   <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-  <style>
-    .finance-stats {
-      display: grid;
-      grid-template-columns: repeat(3, 1fr);
-      gap: 20px;
-      margin-bottom: 24px;
-    }
-    .fin-card {
-      background: white;
-      border-radius: 8px;
-      padding: 20px;
-      box-shadow: 0 4px 6px rgba(0,0,0,0.05);
-      border-left: 4px solid var(--primary);
-    }
-    .fin-card.income { border-left-color: #22c55e; }
-    .fin-card.expense { border-left-color: #ef4444; }
-    .fin-card.profit { border-left-color: #3b82f6; }
-    .fin-card .label { font-size: 14px; color: #64748b; margin-bottom: 8px; }
-    .fin-card .value { font-size: 24px; font-weight: 700; color: #0f172a; }
-    .two-col-fin {
-      display: grid;
-      grid-template-columns: 1fr 350px;
-      gap: 20px;
-      align-items: start;
-    }
-    @media (max-width: 992px) {
-      .two-col-fin { grid-template-columns: 1fr; }
-    }
-  </style>
 </head>
 <body>
   <!-- Flash Messages -->
@@ -83,7 +54,7 @@
 
     <!-- ====== MAIN CONTENT ====== -->
     <div class="main-content">
-      <div class="top-header">
+      <div class="top-header finance-header-actions">
         <div class="page-title">Finance Tracker</div>
         <div class="header-full-name" style="font-weight: 700; color: var(--primary); display: flex; align-items: center; justify-content: center; flex: 1;">Chennakesava Boys Hostel</div>
         <div class="header-actions">
@@ -124,16 +95,20 @@
                 <div class="card-title">📈 Income vs Expense ({{ current_month }})</div>
               </div>
               <div class="card-body">
-                <canvas id="financeChart" height="100"></canvas>
+                <div class="chart-wrapper">
+                  <canvas id="financeChart"></canvas>
+                </div>
               </div>
             </div>
 
-            <!-- Transactions Table -->
+            <!-- Transactions Table & Mobile Cards -->
             <div class="card">
               <div class="card-header">
                 <div class="card-title">📋 Transactions</div>
               </div>
-              <div class="table-wrap">
+              
+              <!-- Desktop Table View -->
+              <div class="table-wrap desktop-fin-table">
                 <table>
                   <thead>
                     <tr>
@@ -168,6 +143,36 @@
                     {% endfor %}
                   </tbody>
                 </table>
+              </div>
+
+              <!-- Mobile Card View -->
+              <div class="mobile-fin-cards" style="padding: 15px;">
+                {% for t in transactions %}
+                <div class="fin-txn-card">
+                  <div class="fin-txn-header">
+                    <span class="fin-txn-date">{{ t.date }}</span>
+                    <span class="badge badge-{% if t.type == 'Income' %}success{% else %}danger{% endif %}">{{ t.type }}</span>
+                  </div>
+                  <div class="fin-txn-body">
+                    <div class="fin-txn-info">
+                      <span class="fin-txn-category">{{ t.category }}</span>
+                      <span class="fin-txn-remarks">{{ t.remarks or '—' }}</span>
+                    </div>
+                    <div class="fin-txn-amount {% if t.type == 'Income' %}income{% else %}expense{% endif %}">
+                      {% if t.type == 'Income' %}+{% else %}-{% endif %}₹{{ "%.2f"|format(t.amount) }}
+                    </div>
+                  </div>
+                  <div class="fin-txn-actions">
+                    <button class="btn btn-sm btn-outline" style="padding: 4px 10px; font-size: 12px;" onclick='openEditModal({{ t.id }}, "{{ t.date }}", "{{ t.type }}", "{{ t.category }}", {{ t.amount }}, "{{ t.remarks|replace("\'", "\\\'")|e }}")'>✏️ Edit</button>
+                    <form method="POST" action="/admin/finance/delete/{{ t.id }}" class="action-form" onsubmit="return confirm('Delete this transaction?')">
+                      <input type="hidden" name="month" value="{{ current_month }}">
+                      <button type="submit" class="btn btn-sm btn-danger-outline" style="padding: 4px 10px; font-size: 12px;">🗑️ Del</button>
+                    </form>
+                  </div>
+                </div>
+                {% else %}
+                <div style="text-align:center;color:#999;padding:20px;">No transactions found for this month.</div>
+                {% endfor %}
               </div>
             </div>
           </div>
@@ -321,6 +326,7 @@
         },
         options: {
           responsive: true,
+          maintainAspectRatio: false,
           scales: {
             y: { beginAtZero: true }
           }
