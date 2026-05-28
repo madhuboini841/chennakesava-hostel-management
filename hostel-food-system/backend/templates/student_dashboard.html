@@ -508,7 +508,6 @@
                     {% endif %}
                   </div>
                   
-                  {% if menu_item %}
                   <div class="meal-card-footer">
                     <button type="button" class="btn btn-sm btn-outline btn-feedback-toggle" onclick="toggleFeedbackForm('{{ slot }}')">
                       {% if feedback %}⭐ Update Feedback{% else %}⭐ Rate Meal{% endif %}
@@ -541,7 +540,6 @@
                       <button type="submit" class="btn btn-sm btn-primary">Submit Feedback</button>
                     </form>
                   </div>
-                  {% endif %}
                 </div>
               {% endfor %}
             </div>
