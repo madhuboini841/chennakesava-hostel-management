@@ -1183,13 +1183,13 @@ tbody td { padding: 10px 14px; color: var(--text); vertical-align: middle; }
   .info-grid { grid-template-columns: 1fr !important; }
   
   /* Tables to Cards (Admin Only) */
-  #section-rooms .table-wrap, #section-fees .table-wrap, #section-complaints .table-wrap, #section-receipts .table-wrap, #section-food .table-wrap { 
+  #section-fees .table-wrap, #section-complaints .table-wrap, #section-receipts .table-wrap, #section-food .table-wrap { 
     overflow: visible; background: transparent; box-shadow: none; border: none; padding: 0; 
   }
-  #section-rooms table, #section-fees table, #section-complaints table, #section-receipts table, #section-food table { border: none; }
-  #section-rooms thead, #section-fees thead, #section-complaints thead, #section-receipts thead, #section-food thead { display: none; }
+  #section-fees table, #section-complaints table, #section-receipts table, #section-food table { border: none; }
+  #section-fees thead, #section-complaints thead, #section-receipts thead, #section-food thead { display: none; }
   
-  #section-rooms tbody tr, #section-fees tbody tr, #section-complaints tbody tr, #section-receipts tbody tr, #section-food tbody tr { 
+  #section-fees tbody tr, #section-complaints tbody tr, #section-receipts tbody tr, #section-food tbody tr { 
     display: block; 
     background: var(--card-bg); 
     border: 1px solid var(--border); 
@@ -1198,7 +1198,7 @@ tbody td { padding: 10px 14px; color: var(--text); vertical-align: middle; }
     padding: 12px;
     box-shadow: 0 2px 8px rgba(0,0,0,0.04);
   }
-  #section-rooms tbody td, #section-fees tbody td, #section-complaints tbody td, #section-receipts tbody td, #section-food tbody td {
+  #section-fees tbody td, #section-complaints tbody td, #section-receipts tbody td, #section-food tbody td {
     display: flex;
     justify-content: space-between;
     align-items: center;
@@ -1206,7 +1206,7 @@ tbody td { padding: 10px 14px; color: var(--text); vertical-align: middle; }
     border-bottom: 1px solid #f1f5f9;
     text-align: right;
   }
-  #section-rooms tbody td:last-child, #section-fees tbody td:last-child, #section-complaints tbody td:last-child, #section-receipts tbody td:last-child, #section-food tbody td:last-child { 
+  #section-fees tbody td:last-child, #section-complaints tbody td:last-child, #section-receipts tbody td:last-child, #section-food tbody td:last-child { 
     border-bottom: none; 
     justify-content: center; 
     padding-top: 12px; 
@@ -1226,14 +1226,6 @@ tbody td { padding: 10px 14px; color: var(--text); vertical-align: middle; }
   }
   
   /* Admin Tables */
-  #section-rooms td:nth-child(1)::before { content: "Room No"; }
-  #section-rooms td:nth-child(2)::before { content: "Floor"; }
-  #section-rooms td:nth-child(3)::before { content: "Type"; }
-  #section-rooms td:nth-child(4)::before { content: "Capacity"; }
-  #section-rooms td:nth-child(5)::before { content: "Occupied"; }
-  #section-rooms td:nth-child(6)::before { content: "Fee"; }
-  #section-rooms td:nth-child(7)::before { content: "Status"; }
-  #section-rooms td:nth-child(8)::before { content: "Actions"; display: none; }
   
   #section-fees td:nth-child(1)::before { content: "ID"; }
   #section-fees td:nth-child(2)::before { content: "Student"; }
