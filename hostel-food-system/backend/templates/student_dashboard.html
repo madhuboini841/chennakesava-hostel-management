@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Student Dashboard — CBH</title>
   <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+  <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
 </head>
 <body>
   <!-- Flash Messages -->
@@ -263,6 +264,7 @@
                       <th>Due Date</th>
                       <th>Status</th>
                       <th>Paid On</th>
+                      <th style="text-align:center;">Action</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -281,6 +283,13 @@
                         {% endif %}
                       </td>
                       <td>{{ fee.payment_date or '—' }}</td>
+                      <td style="text-align:center;">
+                        {% if fee.status != 'paid' %}
+                          <button class="btn btn-sm" style="background:var(--primary); color:white; padding:4px 8px; border-radius:4px; border:none; cursor:pointer;" onclick="payFee({{ fee.id }})">💳 Pay Now</button>
+                        {% else %}
+                          <span style="color:var(--success);">✓</span>
+                        {% endif %}
+                      </td>
                     </tr>
                     {% endfor %}
                   </tbody>
@@ -678,6 +687,79 @@
       } else {
         form.style.display = 'none';
       }
+    }
+
+    async function payFee(feeId) {
+        try {
+            const btn = event.target;
+            const originalText = btn.innerHTML;
+            btn.innerHTML = '⏳ Processing...';
+            btn.disabled = true;
+
+            const res = await fetch(`/student/fee/pay/${feeId}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' }
+            });
+            const data = await res.json();
+            
+            if (res.ok) {
+                const options = {
+                    "key": data.key,
+                    "amount": data.amount,
+                    "currency": "INR",
+                    "name": data.name,
+                    "description": data.description,
+                    "order_id": data.order_id,
+                    "handler": function (response){
+                        verifyPayment({
+                            razorpay_payment_id: response.razorpay_payment_id,
+                            razorpay_order_id: response.razorpay_order_id,
+                            razorpay_signature: response.razorpay_signature,
+                            fee_id: feeId
+                        });
+                    },
+                    "prefill": data.prefill,
+                    "theme": {
+                        "color": "#2563eb"
+                    }
+                };
+                const rzp = new Razorpay(options);
+                rzp.on('payment.failed', function (response){
+                    alert("Payment Failed. Reason: " + response.error.description);
+                    btn.innerHTML = originalText;
+                    btn.disabled = false;
+                });
+                rzp.open();
+            } else {
+                alert(data.error || 'Failed to initiate payment.');
+                btn.innerHTML = originalText;
+                btn.disabled = false;
+            }
+        } catch (err) {
+            console.error(err);
+            alert("An error occurred while initiating payment.");
+        }
+    }
+
+    async function verifyPayment(payload) {
+        try {
+            const res = await fetch(`/student/fee/verify`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+            const data = await res.json();
+            if (res.ok) {
+                alert("Payment Successful! Receipt generated.");
+                window.location.reload();
+            } else {
+                alert(data.error || "Payment verification failed.");
+                window.location.reload();
+            }
+        } catch (err) {
+            console.error(err);
+            alert("Payment verification error.");
+        }
     }
   </script>
 </body>

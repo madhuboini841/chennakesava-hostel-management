@@ -31,6 +31,16 @@ app = Flask(__name__)
 CORS(app, supports_credentials=True)
 app.secret_key = os.getenv("SECRET_KEY", "hostel_secret_key_change_in_production")
 
+import razorpay
+
+RAZORPAY_KEY_ID = os.getenv('RAZORPAY_KEY_ID', 'rzp_test_placeholder')
+RAZORPAY_KEY_SECRET = os.getenv('RAZORPAY_KEY_SECRET', 'rzp_test_secret_placeholder')
+try:
+    razorpay_client = razorpay.Client(auth=(RAZORPAY_KEY_ID, RAZORPAY_KEY_SECRET))
+except Exception as e:
+    razorpay_client = None
+    print(f"[WARN] Razorpay client init failed: {e}")
+
 UPLOAD_FOLDER = os.path.join('static', 'uploads', 'profiles')
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
@@ -2864,6 +2874,183 @@ def debug_email(email):
 # ============================================================
 # RUN THE APP
 # ============================================================
+# ============================================================
+# ONLINE PAYMENTS (RAZORPAY)
+# ============================================================
+@app.route('/student/fee/pay/<int:fee_id>', methods=['POST'])
+def initiate_payment(fee_id):
+    if not is_student():
+        return jsonify({'error': 'Unauthorized'}), 401
+    
+    if not razorpay_client:
+        return jsonify({'error': 'Payment gateway not configured. Please contact admin.'}), 500
+
+    conn = get_db()
+    if not conn: return jsonify({'error': 'DB Error'}), 500
+    cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    
+    # Check fee
+    cursor.execute("SELECT * FROM fees WHERE id = %s AND student_id = %s AND status != 'paid'", (fee_id, session['user_id']))
+    fee = cursor.fetchone()
+    
+    if not fee:
+        cursor.close()
+        conn.close()
+        return jsonify({'error': 'Fee record not found or already paid.'}), 400
+        
+    amount_in_paise = int(fee['amount'] * 100)
+    
+    try:
+        # Create Razorpay Order
+        order_data = {
+            'amount': amount_in_paise,
+            'currency': 'INR',
+            'receipt': f'receipt_fee_{fee_id}',
+            'payment_capture': 1
+        }
+        order = razorpay_client.order.create(data=order_data)
+        
+        # Save order in database (PostgreSQL syntax)
+        cursor.execute("""
+            INSERT INTO online_payments (fee_id, student_id, razorpay_order_id, amount, status)
+            VALUES (%s, %s, %s, %s, 'created')
+        """, (fee_id, session['user_id'], order['id'], fee['amount']))
+        conn.commit()
+            
+        cursor.close()
+        conn.close()
+        
+        return jsonify({
+            'key': RAZORPAY_KEY_ID,
+            'order_id': order['id'],
+            'amount': amount_in_paise,
+            'name': 'Chennakesava Boys Hostel',
+            'description': f"Fee Payment for {fee['month']}",
+            'prefill': {
+                'name': session.get('user_name', ''),
+                'email': session.get('user_email', '')
+            }
+        })
+        
+    except Exception as e:
+        cursor.close()
+        conn.close()
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/student/fee/verify', methods=['POST'])
+def verify_payment():
+    if not is_student():
+        return jsonify({'error': 'Unauthorized'}), 401
+        
+    data = request.json
+    razorpay_payment_id = data.get('razorpay_payment_id')
+    razorpay_order_id = data.get('razorpay_order_id')
+    razorpay_signature = data.get('razorpay_signature')
+    fee_id = data.get('fee_id')
+    
+    if not all([razorpay_payment_id, razorpay_order_id, razorpay_signature, fee_id]):
+        return jsonify({'error': 'Missing parameters'}), 400
+        
+    try:
+        params_dict = {
+            'razorpay_order_id': razorpay_order_id,
+            'razorpay_payment_id': razorpay_payment_id,
+            'razorpay_signature': razorpay_signature
+        }
+        
+        # Verify signature
+        razorpay_client.utility.verify_payment_signature(params_dict)
+        
+        conn = get_db()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        
+        # Securely verify order and update online_payments
+        cursor.execute("SELECT fee_id FROM online_payments WHERE razorpay_order_id = %s", (razorpay_order_id,))
+        order_record = cursor.fetchone()
+        
+        if not order_record or int(order_record['fee_id']) != int(fee_id):
+            cursor.close()
+            conn.close()
+            return jsonify({'error': 'Security Error: Fee ID mismatch or order not found'}), 400
+            
+        cursor.execute("""
+            UPDATE online_payments 
+            SET razorpay_payment_id = %s, razorpay_signature = %s, status = 'successful'
+            WHERE razorpay_order_id = %s
+        """, (razorpay_payment_id, razorpay_signature, razorpay_order_id))
+            
+        # Update fees
+        today = date.today().isoformat()
+        cursor.execute("UPDATE fees SET status = 'paid', payment_date = %s WHERE id = %s", (today, fee_id))
+        
+        # Get fee details for transaction and receipt
+        cursor.execute("""
+            SELECT f.*, s.name as student_name, r.room_number 
+            FROM fees f
+            JOIN students s ON f.student_id = s.id
+            LEFT JOIN rooms r ON s.room_id = r.id
+            WHERE f.id = %s
+        """, (fee_id,))
+        fee = cursor.fetchone()
+        
+        if fee:
+            # Add transaction
+            remarks = f"Online Fee via Razorpay ({razorpay_payment_id})"
+            cursor.execute("""
+                INSERT INTO transactions (date, type, category, amount, remarks)
+                VALUES (%s, 'Income', 'Fees', %s, %s)
+            """, (today, fee['amount'], remarks))
+            
+            # Generate Receipt Record
+            receipt_no = f"REC-ONL-{int(datetime.now().timestamp())}"
+            cursor.execute("""
+                INSERT INTO fee_receipts 
+                (receipt_number, student_id, student_name, room_number, amount, payment_type, payment_mode, period, remarks)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+            """, (receipt_no, fee['student_id'], fee['student_name'], fee['room_number'], 
+                  fee['amount'], 'Monthly Fee', 'Online', f"{fee['month']} {fee.get('year', date.today().year)}", remarks))
+                  
+            # Log activity manually to not open another connection
+            cursor.execute("INSERT INTO student_activity_logs (student_id, action) VALUES (%s, %s)", 
+                           (session['user_id'], f"Paid fee for {fee['month']} online"))
+            
+        conn.commit()
+        cursor.close()
+        conn.close()
+        
+        return jsonify({'status': 'success', 'message': 'Payment successful!'})
+        
+    except razorpay.errors.SignatureVerificationError:
+        return jsonify({'error': 'Invalid payment signature'}), 400
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/admin/payments')
+def admin_payments():
+    if not is_admin():
+        flash("Admin access required.", "error")
+        return redirect(url_for('login'))
+        
+    conn = get_db()
+    cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    try:
+        cursor.execute("""
+            SELECT o.*, s.name as student_name, s.roll_number, f.month, f.year
+            FROM online_payments o
+            JOIN students s ON o.student_id = s.id
+            JOIN fees f ON o.fee_id = f.id
+            ORDER BY o.created_at DESC
+        """)
+        payments = cursor.fetchall()
+    except Exception as e:
+        payments = []
+        flash("Online payments table missing. Please run migrations.", "warning")
+        
+    cursor.close()
+    conn.close()
+    
+    return render_template('admin_payments.html', payments=payments)
+
 if __name__ == '__main__':
     create_default_admin()     # Create admin on first run
     app.run(host='0.0.0.0', debug=True, port=5000, use_reloader=False)
