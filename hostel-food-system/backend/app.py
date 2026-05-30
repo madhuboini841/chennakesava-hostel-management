@@ -2889,7 +2889,10 @@ def add_header(response):
 def initiate_payment(fee_id):
     if not is_student():
         return jsonify({'error': 'Unauthorized'}), 401
-    
+        
+    if RAZORPAY_KEY_ID == 'rzp_test_placeholder' or RAZORPAY_KEY_SECRET == 'rzp_test_secret_placeholder':
+        return jsonify({'error': 'Razorpay API keys are missing in Render Environment Variables. Please configure RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET.'}), 500
+
     if not razorpay_client:
         return jsonify({'error': 'Payment gateway not configured. Please contact admin.'}), 500
 
@@ -2897,9 +2900,14 @@ def initiate_payment(fee_id):
     if not conn: return jsonify({'error': 'DB Error'}), 500
     cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
     
-    # Check fee
-    cursor.execute("SELECT * FROM fees WHERE id = %s AND student_id = %s AND status != 'paid'", (fee_id, session['user_id']))
-    fee = cursor.fetchone()
+    # Check key mode (live vs test)
+    key_mode = 'LIVE' if str(RAZORPAY_KEY_ID).startswith('rzp_live') else 'TEST'
+    print(f"[RAZORPAY] Initiating payment using {key_mode} credentials.")
+    
+    try:
+        # Check fee
+        cursor.execute("SELECT * FROM fees WHERE id = %s AND student_id = %s AND status != 'paid'", (fee_id, session['user_id']))
+        fee = cursor.fetchone()
     
     if not fee:
         cursor.close()
