@@ -307,3 +307,19 @@ CREATE TABLE IF NOT EXISTS kitchen_announcements (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
+
+CREATE TABLE IF NOT EXISTS online_payments (
+    id SERIAL PRIMARY KEY,
+    fee_id INTEGER NOT NULL,
+    student_id INTEGER NOT NULL,
+    razorpay_order_id VARCHAR(255) NOT NULL,
+    razorpay_payment_id VARCHAR(255),
+    razorpay_signature VARCHAR(255),
+    amount DECIMAL(10,2) NOT NULL,
+    currency VARCHAR(10) DEFAULT 'INR',
+    status VARCHAR(50) DEFAULT 'created',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (fee_id) REFERENCES fees(id) ON DELETE CASCADE,
+    FOREIGN KEY (student_id) REFERENCES students(id) ON DELETE CASCADE
+);
