@@ -244,6 +244,7 @@
                       <th>Due Date</th>
                       <th>Status</th>
                       <th>Paid On</th>
+                      <th>Action</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -262,6 +263,13 @@
                         {% endif %}
                       </td>
                       <td>{{ fee.payment_date or '—' }}</td>
+                      <td>
+                        {% if fee.status != 'paid' %}
+                          <button class="btn btn-sm" style="background:var(--primary); color:white; padding:4px 8px; border-radius:4px; border:none; cursor:pointer;" onclick="payFee({{ fee.id }})">💳 Pay Now</button>
+                        {% else %}
+                          <span style="color:#aaa;">—</span>
+                        {% endif %}
+                      </td>
                     </tr>
                     {% endfor %}
                   </tbody>
@@ -509,7 +517,72 @@
     </div><!-- /main-content -->
   </div><!-- /dashboard-layout -->
 
+  <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
   <script>
+    async function payFee(feeId) {
+      try {
+        const response = await fetch(`/student/fee/pay/${feeId}`, {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'}
+        });
+        
+        const data = await response.json();
+        
+        if (!response.ok) {
+          alert(data.error || 'Failed to initiate payment');
+          return;
+        }
+
+        const options = {
+          "key": data.key,
+          "amount": data.amount,
+          "currency": "INR",
+          "name": data.name,
+          "description": data.description,
+          "order_id": data.order_id,
+          "handler": async function (response) {
+            // Verify Payment
+            try {
+              const verifyRes = await fetch('/student/fee/verify', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({
+                  razorpay_payment_id: response.razorpay_payment_id,
+                  razorpay_order_id: response.razorpay_order_id,
+                  razorpay_signature: response.razorpay_signature,
+                  fee_id: feeId
+                })
+              });
+              
+              const verifyData = await verifyRes.json();
+              if (verifyRes.ok) {
+                alert('Payment successful!');
+                window.location.reload();
+              } else {
+                alert('Payment verification failed: ' + (verifyData.error || 'Unknown error'));
+              }
+            } catch (err) {
+              alert('Error verifying payment.');
+            }
+          },
+          "prefill": data.prefill,
+          "theme": {
+            "color": "#3b82f6"
+          }
+        };
+        
+        const rzp1 = new Razorpay(options);
+        rzp1.on('payment.failed', function (response){
+          alert("Payment failed: " + response.error.description);
+        });
+        rzp1.open();
+        
+      } catch (err) {
+        alert('An error occurred. Please try again.');
+        console.error(err);
+      }
+    }
+
     const tabTitles = {
       'profile': 'My Profile',
       'fees': 'Fee Status',
