@@ -2904,10 +2904,9 @@ def initiate_payment(fee_id):
     key_mode = 'LIVE' if str(RAZORPAY_KEY_ID).startswith('rzp_live') else 'TEST'
     print(f"[RAZORPAY] Initiating payment using {key_mode} credentials.")
     
-    try:
-        # Check fee
-        cursor.execute("SELECT * FROM fees WHERE id = %s AND student_id = %s AND status != 'paid'", (fee_id, session['user_id']))
-        fee = cursor.fetchone()
+    # Check fee
+    cursor.execute("SELECT * FROM fees WHERE id = %s AND student_id = %s AND status != 'paid'", (fee_id, session['user_id']))
+    fee = cursor.fetchone()
     
     if not fee:
         cursor.close()
