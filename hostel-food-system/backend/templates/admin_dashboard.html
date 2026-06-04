@@ -328,7 +328,7 @@
                         </td>
                         <td style="text-align: right;" onclick="event.stopPropagation()">
                           <div class="action-menu-wrap">
-                            <button class="action-menu-btn" onclick="toggleActionMenu({{ s.id }})">⋮</button>
+                            <button class="action-menu-btn" onclick="toggleActionMenu('{{ s.id }}', this, event)">⋮</button>
                             <div class="action-dropdown" id="action-dropdown-{{ s.id }}">
                               <a href="/admin/student/{{ s.id }}">👁️ View Profile</a>
                               <button
@@ -2402,20 +2402,71 @@
     }
 
     // Dropdown toggle
-    function toggleActionMenu(id) {
-      // close all others
-      document.querySelectorAll('.action-dropdown').forEach(d => {
-        if (d.id !== `action-dropdown-${id}`) d.classList.remove('show');
-      });
-      document.getElementById(`action-dropdown-${id}`).classList.toggle('show');
+    function toggleActionMenu(id, btnElement, event) {
+      if (event) event.stopPropagation();
+      
+      const originalDropdown = document.getElementById(`action-dropdown-${id}`);
+      if (!originalDropdown) return;
+      
+      const isCurrentlyShown = originalDropdown.classList.contains('show');
+      
+      // Close all first
+      closeAllDropdowns();
+      
+      if (isCurrentlyShown) {
+         return; // already closed
+      }
+
+      // We will move this original dropdown to the body to escape overflow hidden containers
+      const wrapper = btnElement.closest('.action-menu-wrap');
+      if (!originalDropdown._originalParent) {
+          originalDropdown._originalParent = wrapper;
+      }
+
+      document.body.appendChild(originalDropdown);
+      originalDropdown.classList.add('show');
+      
+      // Position it
+      const btnRect = btnElement.getBoundingClientRect();
+      const dropdownRect = originalDropdown.getBoundingClientRect();
+      
+      let topPos = btnRect.bottom + window.scrollY + 5;
+      let leftPos = btnRect.right - dropdownRect.width + window.scrollX;
+      
+      // Check if it clips bottom of viewport
+      if (btnRect.bottom + dropdownRect.height + 10 > window.innerHeight) {
+         // Open upwards
+         topPos = btnRect.top + window.scrollY - dropdownRect.height - 5;
+      }
+      
+      originalDropdown.style.position = 'absolute';
+      originalDropdown.style.top = `${topPos}px`;
+      originalDropdown.style.left = `${leftPos}px`;
+      originalDropdown.style.zIndex = '9999';
+    }
+
+    function closeAllDropdowns() {
+       document.querySelectorAll('.action-dropdown.show').forEach(d => {
+          d.classList.remove('show');
+          if (d._originalParent) {
+             d._originalParent.appendChild(d);
+             d.style.top = '';
+             d.style.left = '';
+             d.style.position = '';
+          }
+       });
     }
 
     // Close dropdowns if clicked outside
     document.addEventListener('click', function (e) {
-      if (!e.target.closest('.action-menu-wrap')) {
-        document.querySelectorAll('.action-dropdown').forEach(d => d.classList.remove('show'));
+      if (!e.target.closest('.action-menu-wrap') && !e.target.closest('.action-dropdown')) {
+        closeAllDropdowns();
       }
     });
+
+    // Close on scroll or resize to prevent detached dropdowns
+    window.addEventListener('scroll', closeAllDropdowns, true);
+    window.addEventListener('resize', closeAllDropdowns);
 
     // ---- Fee Alerts System ----
     function calculateFeeAlerts() {
