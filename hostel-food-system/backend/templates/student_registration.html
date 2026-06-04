@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Student Registration — Chennakesava Boys Hostel</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+  <link href='https://unpkg.com/boxicons@2.1.4/css/boxicons.min.css' rel='stylesheet'>
+  <style>
+    .login-form-container {
+        overflow-y: auto;
+        max-height: 100vh;
+        padding-top: 40px;
+        padding-bottom: 40px;
+    }
+    .form-row {
+        display: flex;
+        gap: 15px;
+        margin-bottom: 15px;
+    }
+    .form-row .form-group-icon {
+        flex: 1;
+        margin-bottom: 0;
+    }
+    @media (max-width: 600px) {
+        .form-row {
+            flex-direction: column;
+            gap: 15px;
+        }
+    }
+    .form-group-icon {
+        position: relative;
+        margin-bottom: 15px;
+    }
+    .form-group-icon input, .form-group-icon select, .form-group-icon textarea {
+        width: 100%;
+        padding: 12px 15px 12px 40px;
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        font-size: 14px;
+        transition: all 0.3s ease;
+        background-color: #f8fafc;
+    }
+    .form-group-icon input:focus, .form-group-icon select:focus, .form-group-icon textarea:focus {
+        border-color: var(--primary);
+        box-shadow: 0 0 0 3px rgba(37,99,235,0.1);
+        outline: none;
+        background-color: white;
+    }
+    .form-group-icon textarea {
+        padding: 12px 15px;
+    }
+    .input-icon {
+        position: absolute;
+        left: 15px;
+        top: 50%;
+        transform: translateY(-50%);
+        color: #94a3b8;
+        font-size: 18px;
+    }
+    .section-title {
+        font-size: 14px;
+        font-weight: 600;
+        color: #64748b;
+        margin-top: 20px;
+        margin-bottom: 10px;
+        border-bottom: 1px solid #e2e8f0;
+        padding-bottom: 5px;
+    }
+    .login-card {
+        max-width: 550px;
+        margin: 0 auto;
+    }
+  </style>
+</head>
+<body class="login-body">
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+      <div class="flash-messages" id="flashMessages">
+        {% for category, message in messages %}
+          <div class="flash {{ category }}">
+            {% if category == 'success' %}✅{% elif category == 'error' %}❌{% else %}ℹ️{% endif %}
+            {{ message }}
+          </div>
+        {% endfor %}
+      </div>
+    {% endif %}
+  {% endwith %}
+
+  <div class="login-wrapper">
+    <div class="login-branding" style="background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);">
+      <div class="branding-overlay">
+        <div class="branding-header">
+          <div class="brand-logo">
+            <i class='bx bx-home-alt'></i> CBH
+          </div>
+        </div>
+        
+        <div class="branding-text">
+          <h1>Student<br><span>Registration</span></h1>
+          <p>Welcome! Complete this form to submit your registration request to the hostel administration.</p>
+        </div>
+
+        <div class="branding-features">
+          <div class="feature-item">
+            <div class="feature-icon"><i class='bx bx-time'></i></div>
+            <div class="feature-text">
+              <h4>Quick Process</h4>
+              <p>Fill out the form and wait for admin approval</p>
+            </div>
+          </div>
+          <div class="feature-item">
+            <div class="feature-icon"><i class='bx bxs-check-shield'></i></div>
+            <div class="feature-text">
+              <h4>Secure Portal</h4>
+              <p>Your details are safely encrypted</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="branding-footer">
+          <i class='bx bx-check-shield'></i> &copy; 2026 Chennakesava Boys Hostel. All rights reserved.
+        </div>
+      </div>
+    </div>
+
+    <div class="login-form-container">
+      <div class="login-card">
+        
+        <div class="mobile-logo-circle">
+          <i class='bx bx-home-alt'></i>
+        </div>
+
+        <div class="login-header">
+          <h2>Registration Form</h2>
+          <p>Please enter your accurate details below</p>
+        </div>
+
+        <form method="POST" action="/student-registration">
+          
+          <div class="section-title">Personal Details</div>
+          <div class="form-group-icon">
+            <i class='bx bx-user input-icon'></i>
+            <input type="text" name="name" placeholder="Full Name *" required>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group-icon">
+              <i class='bx bx-phone input-icon'></i>
+              <input type="tel" name="mobile_number" placeholder="Mobile Number *" required>
+            </div>
+            <div class="form-group-icon">
+              <i class='bx bx-calendar input-icon'></i>
+              <input type="date" name="dob">
+            </div>
+          </div>
+
+          <div class="section-title">Academic Details</div>
+          <div class="form-row">
+            <div class="form-group-icon">
+              <i class='bx bxs-institution input-icon'></i>
+              <input type="text" name="college_name" placeholder="College Name *" required>
+            </div>
+            <div class="form-group-icon">
+              <i class='bx bx-book-bookmark input-icon'></i>
+              <input type="text" name="course" placeholder="Course (e.g. B.Tech) *" required>
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group-icon">
+              <i class='bx bx-id-card input-icon'></i>
+              <input type="text" name="roll_number" placeholder="Roll Number">
+            </div>
+            <div class="form-group-icon">
+              <i class='bx bx-layer input-icon'></i>
+              <select name="year_of_study">
+                <option value="1">Year 1</option>
+                <option value="2">Year 2</option>
+                <option value="3">Year 3</option>
+                <option value="4">Year 4</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="section-title">Parent/Guardian Details</div>
+          <div class="form-row">
+            <div class="form-group-icon">
+              <i class='bx bx-group input-icon'></i>
+              <input type="text" name="parent_name" placeholder="Parent Name *" required>
+            </div>
+            <div class="form-group-icon">
+              <i class='bx bx-phone-call input-icon'></i>
+              <input type="tel" name="parent_number" placeholder="Parent Mobile *" required>
+            </div>
+          </div>
+
+          <div class="section-title">Address Details</div>
+          <div class="form-group-icon" style="padding-left: 0;">
+            <textarea name="permanent_address" rows="2" placeholder="Permanent Address *" required></textarea>
+          </div>
+          <div class="form-row">
+            <div class="form-group-icon">
+              <i class='bx bx-buildings input-icon'></i>
+              <input type="text" name="city" placeholder="City *" required>
+            </div>
+            <div class="form-group-icon">
+              <i class='bx bx-map input-icon'></i>
+              <input type="text" name="state" placeholder="State *" required>
+            </div>
+          </div>
+
+          <div class="section-title">Account Setup</div>
+          <div class="form-group-icon">
+            <i class='bx bx-envelope input-icon'></i>
+            <input type="email" name="email" placeholder="Email Address (Used for Login) *" required>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group-icon">
+              <i class='bx bx-lock-alt input-icon'></i>
+              <input type="password" id="password" name="password" placeholder="Password *" required minlength="6">
+              <i class='bx bx-hide password-toggle' id="togglePassword" onclick="togglePasswordVisibility('password', 'togglePassword')"></i>
+            </div>
+            <div class="form-group-icon">
+              <i class='bx bx-lock-alt input-icon'></i>
+              <input type="password" id="confirm_password" name="confirm_password" placeholder="Confirm Password *" required minlength="6">
+            </div>
+          </div>
+
+          <button type="submit" class="btn-submit-modern" style="margin-top: 20px;">
+            Submit Registration <i class='bx bx-right-arrow-alt'></i>
+          </button>
+          
+          <div style="text-align: center; margin-top: 15px;">
+            <a href="/login" class="forgot-link">Already approved? Log in here.</a>
+          </div>
+        </form>
+
+      </div>
+    </div>
+  </div>
+
+  <script>
+    function togglePasswordVisibility(inputId, toggleId) {
+      const passwordInput = document.getElementById(inputId);
+      const toggleIcon = document.getElementById(toggleId);
+      
+      if (passwordInput.type === 'password') {
+        passwordInput.type = 'text';
+        toggleIcon.classList.remove('bx-hide');
+        toggleIcon.classList.add('bx-show');
+      } else {
+        passwordInput.type = 'password';
+        toggleIcon.classList.remove('bx-show');
+        toggleIcon.classList.add('bx-hide');
+      }
+    }
+
+    setTimeout(() => {
+      const f = document.getElementById('flashMessages');
+      if (f) {
+        f.style.opacity = '0';
+        f.style.transition = 'opacity 0.5s';
+        setTimeout(() => f.remove(), 500);
+      }
+    }, 5000);
+  </script>
+</body>
+</html>
