@@ -3279,7 +3279,7 @@ def run_migrations():
     try:
         conn = get_db()
         cursor = conn.cursor()
-        cursor.execute("ALTER TABLE students MODIFY COLUMN status ENUM('active', 'inactive', 'pending', 'rejected') DEFAULT 'active';")
+        cursor.execute("ALTER TABLE students ALTER COLUMN status TYPE VARCHAR(50);")
         conn.commit()
         cursor.close()
         conn.close()
