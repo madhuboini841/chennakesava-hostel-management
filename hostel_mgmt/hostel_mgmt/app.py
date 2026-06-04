@@ -671,7 +671,7 @@ def student_registration():
         dob = request.form.get('dob') or None
         college_name = request.form.get('college_name', '').strip()
         course = request.form.get('course', '').strip()
-        roll_number = request.form.get('roll_number', '').strip()
+        roll_number = request.form.get('roll_number', '').strip() or None
         year_of_study = request.form.get('year_of_study', 1)
         parent_name = request.form.get('parent_name', '').strip()
         parent_number = request.form.get('parent_number', '').strip()
@@ -2859,9 +2859,22 @@ def admin_payments():
     
     return render_template('admin_payments.html', payments=payments)
 
+def run_migrations():
+    try:
+        conn = get_db()
+        cursor = conn.cursor()
+        cursor.execute("ALTER TABLE students MODIFY COLUMN status ENUM('active', 'inactive', 'pending', 'rejected') DEFAULT 'active';")
+        conn.commit()
+        cursor.close()
+        conn.close()
+        print("Database migrations applied successfully.")
+    except Exception as e:
+        print(f"Migration info (already applied or error): {e}")
+
 # ============================================================
 # RUN THE APP
 # ============================================================
 if __name__ == '__main__':
+    run_migrations()           # Run DB schema migrations
     create_default_admin()     # Create admin on first run
     app.run(host='0.0.0.0', debug=True, port=5000, use_reloader=False)
