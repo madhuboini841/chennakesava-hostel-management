@@ -2418,11 +2418,6 @@
       }
 
       // We will move this original dropdown to the body to escape overflow hidden containers
-      const wrapper = btnElement.closest('.action-menu-wrap');
-      if (!originalDropdown._originalParent) {
-          originalDropdown._originalParent = wrapper;
-      }
-
       document.body.appendChild(originalDropdown);
       originalDropdown.classList.add('show');
       
@@ -2448,23 +2443,23 @@
     function closeAllDropdowns() {
        document.querySelectorAll('.action-dropdown.show').forEach(d => {
           d.classList.remove('show');
-          if (d._originalParent) {
-             d._originalParent.appendChild(d);
-             d.style.top = '';
-             d.style.left = '';
-             d.style.position = '';
-          }
+          // Important: We do NOT move the DOM element back to its parent here!
+          // Moving a <form> while it is submitting (e.g. after clicking Delete) 
+          // instantly aborts the browser's form submission process.
+          // It's perfectly safe to leave the hidden dropdown in the body.
        });
     }
 
-    // Close dropdowns if clicked outside
+    // Close dropdowns if clicked outside OR if an action item is clicked
     document.addEventListener('click', function (e) {
-      if (!e.target.closest('.action-menu-wrap') && !e.target.closest('.action-dropdown')) {
-        closeAllDropdowns();
-      }
+      // If we clicked the toggle button, do nothing here (handled by toggleActionMenu)
+      if (e.target.closest('.action-menu-btn')) return;
+      
+      // Otherwise, close all dropdowns (even if we clicked an action inside the dropdown, we want it to close)
+      closeAllDropdowns();
     });
 
-    // Close on scroll or resize to prevent detached dropdowns
+    // Close on scroll or resize to prevent detached dropdowns floating around
     window.addEventListener('scroll', closeAllDropdowns, true);
     window.addEventListener('resize', closeAllDropdowns);
 
