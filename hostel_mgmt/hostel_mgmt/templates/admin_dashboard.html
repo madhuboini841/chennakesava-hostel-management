@@ -2111,5 +2111,89 @@
       });
     }
   </script>
+<!-- STATE MANAGER -->
+<script>
+  document.addEventListener('DOMContentLoaded', () => {
+    const prefix = 'cbh_admin_';
+
+    // Check if user clicked Dashboard intentionally (no referrer or same path but user clicked link)
+    // Actually, a simpler approach is just to restore if we have saved state
+    const savedTab = sessionStorage.getItem(prefix + 'tab');
+    if (savedTab && typeof window.showSection === 'function') {
+      window.showSection(savedTab);
+    }
+
+    // Restore Inputs and Selects
+    document.querySelectorAll('input:not([type="password"]):not([type="hidden"]), select').forEach(el => {
+      if (!el.id && !el.classList.contains('student-search-bar')) return; 
+      
+      const elId = el.id || el.name || 'search';
+      const savedVal = sessionStorage.getItem(prefix + 'input_' + elId);
+      
+      if (savedVal !== null) {
+        if (el.type === 'checkbox' || el.type === 'radio') {
+          el.checked = savedVal === 'true';
+        } else {
+          el.value = savedVal;
+        }
+        // Trigger input to apply filter instantly
+        el.dispatchEvent(new Event('input', { bubbles: true }));
+        el.dispatchEvent(new Event('keyup', { bubbles: true }));
+        el.dispatchEvent(new Event('change', { bubbles: true }));
+      }
+
+      // Save on change
+      const saveInput = () => {
+        if (el.type === 'checkbox' || el.type === 'radio') {
+          sessionStorage.setItem(prefix + 'input_' + elId, el.checked);
+        } else {
+          sessionStorage.setItem(prefix + 'input_' + elId, el.value);
+        }
+      };
+      el.addEventListener('input', saveInput);
+      el.addEventListener('change', saveInput);
+      el.addEventListener('keyup', saveInput);
+    });
+
+    // Restore active filter chip
+    const savedFilter = sessionStorage.getItem(prefix + 'student_filter');
+    if (savedFilter && typeof window.setStudentFilter === 'function') {
+      const chip = document.querySelector(`.filter-chip[data-filter="${savedFilter}"]`);
+      if (chip) {
+        window.setStudentFilter(savedFilter, chip);
+      }
+    }
+
+    // Restore Scroll Position
+    const savedScroll = sessionStorage.getItem(prefix + 'scroll');
+    if (savedScroll) {
+      setTimeout(() => window.scrollTo(0, parseInt(savedScroll, 10)), 100);
+    }
+
+    // Save scroll on scroll
+    window.addEventListener('scroll', () => {
+      sessionStorage.setItem(prefix + 'scroll', window.scrollY);
+    }, {passive: true});
+  });
+
+  // Intercept setStudentFilter
+  const origSetStudentFilter = window.setStudentFilter;
+  if (typeof origSetStudentFilter === 'function') {
+    window.setStudentFilter = function(type, el) {
+      origSetStudentFilter(type, el);
+      sessionStorage.setItem('cbh_admin_student_filter', type);
+    };
+  }
+
+  // Intercept showSection
+  const origShowSection = window.showSection;
+  if (typeof origShowSection === 'function') {
+    window.showSection = function(name, link) {
+      origShowSection(name, link);
+      sessionStorage.setItem('cbh_admin_tab', name);
+    };
+  }
+</script>
 </body>
+
 </html>

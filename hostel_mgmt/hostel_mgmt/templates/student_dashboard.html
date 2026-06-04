@@ -639,5 +639,36 @@
       if (f) { f.style.opacity = '0'; f.style.transition = 'opacity 0.5s'; setTimeout(() => f.remove(), 500); }
     }, 4000);
   </script>
+<!-- STATE MANAGER -->
+<script>
+  document.addEventListener('DOMContentLoaded', () => {
+    const prefix = 'cbh_student_';
+
+    const savedTab = sessionStorage.getItem(prefix + 'tab');
+    if (savedTab && typeof window.showTab === 'function') {
+      window.showTab(savedTab);
+    }
+
+    // Restore Scroll Position
+    const savedScroll = sessionStorage.getItem(prefix + 'scroll');
+    if (savedScroll) {
+      setTimeout(() => window.scrollTo(0, parseInt(savedScroll, 10)), 100);
+    }
+
+    // Save scroll on scroll
+    window.addEventListener('scroll', () => {
+      sessionStorage.setItem(prefix + 'scroll', window.scrollY);
+    }, {passive: true});
+  });
+
+  // Intercept showTab
+  const origShowTab = window.showTab;
+  if (typeof origShowTab === 'function') {
+    window.showTab = function(name) {
+      origShowTab(name);
+      sessionStorage.setItem('cbh_student_tab', name);
+    };
+  }
+</script>
 </body>
 </html>
