@@ -49,7 +49,7 @@ CREATE TABLE IF NOT EXISTS students (
     year_of_study INT,
     room_id INT,
     join_date DATE DEFAULT (CURRENT_DATE),
-    status ENUM('active', 'inactive') DEFAULT 'active',
+    status ENUM('active', 'inactive', 'pending', 'rejected') DEFAULT 'active',
     profile_image VARCHAR(255) DEFAULT 'default.png',
     parent_number VARCHAR(15),
     meal_preference ENUM('veg', 'non-veg') DEFAULT 'veg',

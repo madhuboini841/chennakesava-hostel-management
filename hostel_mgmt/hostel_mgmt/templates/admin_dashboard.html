@@ -43,6 +43,7 @@
         </ul>
         <div class="nav-section-title">Management</div>
         <ul>
+          <li class="nav-item"><a href="#requests" class="nav-link" onclick="showSection('requests', this)"><span class="nav-icon">📋</span> Registration Requests {% if pending_students %}<span class="sidebar-badge" style="display:inline-block; background:var(--danger)">{{ pending_students|length }}</span>{% endif %}</a></li>
           <li class="nav-item"><a href="#students" class="nav-link" onclick="showSection('students', this)"><span class="nav-icon">👨‍🎓</span> Students</a></li>
           <li class="nav-item"><a href="#rooms" class="nav-link" onclick="showSection('rooms', this)"><span class="nav-icon">🛏️</span> Rooms</a></li>
           <li class="nav-item"><a href="#fees" class="nav-link" onclick="showSection('fees', this)"><span class="nav-icon">💰</span> Fees <span class="sidebar-badge" id="sidebarFeeBadge">0</span></a></li>
@@ -382,6 +383,43 @@
                 <div class="empty-row" style="text-align:center;padding:30px;color:#999;background:white;border-radius:12px;border:1px solid var(--border);">No students registered yet.</div>
                 {% endfor %}
               </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ===== SECTION: REGISTRATION REQUESTS ===== -->
+        <div id="section-requests" class="dashboard-section" style="display:none">
+          <div class="card">
+            <div class="card-header">
+              <div class="card-title">📋 Student Registration Requests</div>
+            </div>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr><th>Name</th><th>Email & Phone</th><th>Course</th><th>Applied On</th><th>Actions</th></tr>
+                </thead>
+                <tbody>
+                  {% for s in pending_students %}
+                  <tr>
+                    <td><strong>{{ s.name }}</strong></td>
+                    <td>
+                      <div>{{ s.email }}</div>
+                      <div style="font-size:12px;color:#64748b;">{{ s.mobile_number }}</div>
+                    </td>
+                    <td>{{ s.course or '—' }}<br><small>{{ s.college_name or '' }}</small></td>
+                    <td>{{ s.created_at.strftime('%d %b %Y') if s.created_at else '' }}</td>
+                    <td style="display:flex;gap:8px;">
+                      <button class="btn btn-sm btn-success" onclick="openAcceptRequestModal({{ s.id }}, '{{ s.name|escape }}')">✅ Accept</button>
+                      <form method="POST" action="/admin/request/reject/{{ s.id }}" onsubmit="return confirm('Reject this registration request?')" style="margin:0;">
+                        <button type="submit" class="btn btn-sm btn-danger">❌ Reject</button>
+                      </form>
+                    </td>
+                  </tr>
+                  {% else %}
+                  <tr><td colspan="5" style="text-align:center;padding:30px;color:#94a3b8;">No pending registration requests.</td></tr>
+                  {% endfor %}
+                </tbody>
+              </table>
             </div>
           </div>
         </div>
@@ -1347,7 +1385,44 @@
     </div>
   </div>
 
+  <!-- Accept Request Modal -->
+  <div class="modal-overlay" id="acceptRequestModal">
+    <div class="modal">
+      <div class="modal-header">
+        <h3>Approve Registration Request</h3>
+        <button class="close-btn" onclick="closeModal('acceptRequestModal')">✕</button>
+      </div>
+      <div class="modal-body">
+        <p style="margin-bottom: 15px;">Assign a room to <strong><span id="acceptStudentName"></span></strong> to complete the registration.</p>
+        <form id="acceptRequestForm" method="POST" action="">
+          <div class="form-group">
+            <label>Assign Room *</label>
+            <select name="room_id" required>
+              <option value="">— Select a room —</option>
+              {% for r in rooms %}
+              <option value="{{ r.id }}" {% if r.status == 'full' %}disabled{% endif %}>
+                Room {{ r.room_number }} — {{ r.room_type|title }}, Floor {{ r.floor }}
+                ({{ r.current_occupancy }}/{{ r.capacity }} occupied, ₹{{ "%.0f"|format(r.monthly_fee) }}/month)
+                {% if r.status == 'full' %} [FULL]{% endif %}
+              </option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="form-actions">
+            <button type="button" class="btn btn-outline" onclick="closeModal('acceptRequestModal')">Cancel</button>
+            <button type="submit" class="btn btn-primary">✅ Approve Student</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
   <script>
+    function openAcceptRequestModal(studentId, studentName) {
+      document.getElementById('acceptStudentName').innerText = studentName;
+      document.getElementById('acceptRequestForm').action = '/admin/request/accept/' + studentId;
+      document.getElementById('acceptRequestModal').classList.add('open');
+    }
     function toggleSidebar() {
       document.querySelector('.sidebar').classList.toggle('open');
       const overlay = document.querySelector('.sidebar-overlay');
