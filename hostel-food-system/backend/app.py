@@ -3239,7 +3239,13 @@ def accept_request(student_id):
             </div>
         </div>
         """
-        send_auth_email(student['email'], "Hostel Registration Approved!", body)
+        import threading
+        email_thread = threading.Thread(
+            target=send_auth_email,
+            args=(student['email'], "Hostel Registration Approved!", body)
+        )
+        email_thread.daemon = True
+        email_thread.start()
 
         flash(f"Student {student['name']} approved and assigned to Room {room['room_number']}.", "success")
     except Exception as e:
@@ -3257,11 +3263,45 @@ def reject_request(student_id):
         return jsonify({'error': 'Unauthorized'}), 401
 
     conn = get_db()
-    cursor = conn.cursor()
+    cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
     try:
-        cursor.execute("UPDATE students SET status = 'rejected' WHERE id = %s AND status = 'pending'", (student_id,))
-        conn.commit()
-        flash("Registration request rejected.", "info")
+        # First, fetch the student details for the email
+        cursor.execute("SELECT name, email FROM students WHERE id = %s AND status = 'pending'", (student_id,))
+        student = cursor.fetchone()
+        
+        if student:
+            cursor.execute("UPDATE students SET status = 'rejected' WHERE id = %s AND status = 'pending'", (student_id,))
+            conn.commit()
+            flash("Registration request rejected.", "info")
+
+            # Send rejection email
+            body = f"""
+            <div style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; max-width: 600px; margin: 0 auto; background-color: #ffffff; border: 1px solid #e5e7eb; border-radius: 10px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);">
+                <div style="background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%); padding: 35px 20px; text-align: center;">
+                    <h1 style="color: #ffffff; margin: 0; font-size: 28px; font-weight: 700; letter-spacing: 0.5px;">Chennakesava Boys Hostel</h1>
+                    <p style="color: #fee2e2; margin: 10px 0 0 0; font-size: 18px; font-weight: 500;">Registration Update</p>
+                </div>
+                
+                <div style="padding: 40px 30px; background-color: #ffffff;">
+                    <p style="font-size: 16px; color: #374151; margin-top: 0;">Dear <strong>{student['name']}</strong>,</p>
+                    <p style="font-size: 16px; color: #4b5563; line-height: 1.6; margin-bottom: 25px;">
+                        Thank you for applying to Chennakesava Boys Hostel. We regret to inform you that we cannot approve your registration request at this time.
+                    </p>
+                    <p style="font-size: 16px; color: #4b5563; line-height: 1.6; margin-bottom: 30px;">
+                        If you have any questions, please contact the hostel administration directly.
+                    </p>
+                </div>
+            </div>
+            """
+            import threading
+            email_thread = threading.Thread(
+                target=send_auth_email,
+                args=(student['email'], "Hostel Registration Update", body)
+            )
+            email_thread.daemon = True
+            email_thread.start()
+        else:
+            flash("Student not found or already processed.", "error")
     except Exception as e:
         conn.rollback()
         flash(f"Error rejecting request: {e}", "error")
