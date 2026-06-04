@@ -3104,7 +3104,7 @@ def student_registration():
             return redirect(url_for('student_registration'))
 
         conn = get_db()
-        cursor = conn.cursor(dictionary=True)
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
 
         # Check if email is already registered
         cursor.execute("SELECT id FROM students WHERE email = %s", (email,))
@@ -3175,7 +3175,7 @@ def accept_request(student_id):
         return redirect(url_for('admin_dashboard'))
 
     conn = get_db()
-    cursor = conn.cursor(dictionary=True)
+    cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
 
     try:
         # Check if student is still pending
@@ -3199,7 +3199,7 @@ def accept_request(student_id):
 
         # Update room occupancy
         cursor.execute("UPDATE rooms SET current_occupancy = current_occupancy + 1 WHERE id = %s", (room_id,))
-        cursor.execute("UPDATE rooms SET status = IF(current_occupancy >= capacity, 'full', 'available') WHERE id = %s", (room_id,))
+        cursor.execute("UPDATE rooms SET status = CASE WHEN current_occupancy >= capacity THEN 'full' ELSE 'available' END WHERE id = %s", (room_id,))
 
         # Create initial fee
         today = date.today()
