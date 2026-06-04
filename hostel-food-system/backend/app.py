@@ -3273,20 +3273,7 @@ def reject_request(student_id):
 
 # ============================================================
 # ROUTE: Update Food Menu (Admin)
-# ============================================================
-@app.route('/admin/food/menu', methods=['POST'])
-def admin_food_menu():
-    if not is_admin():
-        return jsonify({'error': 'Unauthorized'}), 401
-        
-    date_str = request.form.get('date')
-    meal_slot = request.form.get('meal_slot')
-    meal_type = request.form.get('meal_type')
-    items = request.form.get('items', '').strip()
-    
-    conn = get_db()
-    cursor = conn.cursor(dictionary=True)
-    
+
 
 def run_migrations():
     try:
