@@ -885,7 +885,7 @@ course, year_of_study, room_id, dob, gender, aadhaar_number, blood_group, parent
                 flash(f"Student '{name}' registered, but the email failed to send. Error: {err_msg}", "error")
 
             cursor.close(); conn.close()
-            return redirect(url_for('admin_dashboard'))
+            return redirect(request.referrer or url_for('admin_dashboard'))
 
         except mysql.connector.IntegrityError as e:
             conn.rollback()
@@ -1026,7 +1026,7 @@ def student_food_optout():
     
     if date_str != today:
         flash("You can only change opt-outs for today.", "error")
-        return redirect(url_for('student_dashboard'))
+        return redirect(request.referrer or url_for('student_dashboard'))
         
     now = datetime.now()
     hour = now.hour
@@ -1046,12 +1046,12 @@ def student_food_optout():
     if skip_b != old_b and hour >= 7:
         flash("Breakfast opt-out deadline (7 AM) has passed.", "error")
         cursor.close(); conn.close()
-        return redirect(url_for('student_dashboard'))
+        return redirect(request.referrer or url_for('student_dashboard'))
     
     if (skip_l != old_l or skip_d != old_d) and hour >= 10:
         flash("Lunch/Dinner opt-out deadline (10 AM) has passed.", "error")
         cursor.close(); conn.close()
-        return redirect(url_for('student_dashboard'))
+        return redirect(request.referrer or url_for('student_dashboard'))
         
     if existing:
         cursor.execute("""
@@ -1070,7 +1070,7 @@ def student_food_optout():
     conn.close()
     
     flash("Opt-out preferences saved successfully!", "success")
-    return redirect(url_for('student_dashboard'))
+    return redirect(request.referrer or url_for('student_dashboard'))
 @app.route('/complaints/submit', methods=['POST'])
 def submit_complaint():
     if not is_student():
@@ -1082,7 +1082,7 @@ def submit_complaint():
 
     if not title or not description:
         flash("Title and description are required.", "error")
-        return redirect(url_for('student_dashboard'))
+        return redirect(request.referrer or url_for('student_dashboard'))
 
     conn = get_db()
     cursor = conn.cursor()
@@ -1096,7 +1096,7 @@ def submit_complaint():
     log_activity(session['user_id'], f"Submitted complaint: {title}")
 
     flash("Complaint submitted successfully!", "success")
-    return redirect(url_for('student_dashboard'))
+    return redirect(request.referrer or url_for('student_dashboard'))
 
 # ============================================================
 # ROUTE: Admin Dashboard
@@ -1293,7 +1293,7 @@ def accept_request(student_id):
     room_id = request.form.get('room_id')
     if not room_id:
         flash("Room assignment is required to approve the student.", "error")
-        return redirect(url_for('admin_dashboard'))
+        return redirect(request.referrer or url_for('admin_dashboard'))
 
     conn = get_db()
     cursor = conn.cursor(dictionary=True)
@@ -1305,7 +1305,7 @@ def accept_request(student_id):
         if not student:
             flash("Student not found or already processed.", "error")
             cursor.close(); conn.close()
-            return redirect(url_for('admin_dashboard'))
+            return redirect(request.referrer or url_for('admin_dashboard'))
 
         # Check room status
         cursor.execute("SELECT * FROM rooms WHERE id = %s", (room_id,))
@@ -1313,7 +1313,7 @@ def accept_request(student_id):
         if not room or room['status'] == 'full':
             flash("Selected room is invalid or full.", "error")
             cursor.close(); conn.close()
-            return redirect(url_for('admin_dashboard'))
+            return redirect(request.referrer or url_for('admin_dashboard'))
 
         # Update student
         cursor.execute("UPDATE students SET status = 'active', room_id = %s WHERE id = %s", (room_id, student_id))
@@ -1370,7 +1370,7 @@ def accept_request(student_id):
         cursor.close()
         conn.close()
 
-    return redirect(url_for('admin_dashboard'))
+    return redirect(request.referrer or url_for('admin_dashboard'))
 
 @app.route('/admin/request/reject/<int:student_id>', methods=['POST'])
 def reject_request(student_id):
@@ -1390,7 +1390,7 @@ def reject_request(student_id):
         cursor.close()
         conn.close()
 
-    return redirect(url_for('admin_dashboard'))
+    return redirect(request.referrer or url_for('admin_dashboard'))
 
 # ============================================================
 # ROUTE: Update Food Menu (Admin)
@@ -1429,7 +1429,7 @@ def admin_food_menu():
         
     cursor.close()
     conn.close()
-    return redirect(url_for('admin_dashboard'))
+    return redirect(request.referrer or url_for('admin_dashboard'))
 
 @app.route('/admin/food/menu/edit/<int:id>', methods=['POST'])
 def edit_food_menu(id):
@@ -1461,7 +1461,7 @@ def edit_food_menu(id):
             flash("Menu item updated.", "success")
             
     cursor.close(); conn.close()
-    return redirect(url_for('admin_dashboard') + '#food')
+    return redirect(request.referrer or url_for('admin_dashboard'))
 
 @app.route('/admin/food/menu/delete/<int:id>', methods=['POST'])
 def delete_food_menu(id):
@@ -1492,7 +1492,7 @@ def delete_food_menu(id):
             flash("Menu item deleted.", "success")
             
     cursor.close(); conn.close()
-    return redirect(url_for('admin_dashboard') + '#food')
+    return redirect(request.referrer or url_for('admin_dashboard'))
 
 # ============================================================
 # ROUTE: Add Notice (Admin)
@@ -1508,7 +1508,7 @@ def add_notice():
 
     if not title or not content:
         flash("Title and content are required.", "error")
-        return redirect(url_for('admin_dashboard'))
+        return redirect(request.referrer or url_for('admin_dashboard'))
 
     conn = get_db()
     cursor = conn.cursor()
@@ -1520,7 +1520,7 @@ def add_notice():
     conn.close()
 
     flash("Notice posted successfully!", "success")
-    return redirect(url_for('admin_dashboard'))
+    return redirect(request.referrer or url_for('admin_dashboard'))
 
 # ============================================================
 # ROUTE: Update Complaint Status (Admin)
@@ -1543,7 +1543,7 @@ def update_complaint(complaint_id):
     conn.close()
 
     flash("Complaint updated successfully!", "success")
-    return redirect(url_for('admin_dashboard'))
+    return redirect(request.referrer or url_for('admin_dashboard'))
 
 # ============================================================
 # ROUTE: Update Fee Status (Admin)
@@ -1566,7 +1566,7 @@ def update_fee(fee_id):
     conn.close()
 
     flash("Fee status updated!", "success")
-    return redirect(url_for('admin_dashboard'))
+    return redirect(request.referrer or url_for('admin_dashboard'))
 
 # ============================================================
 # ROUTE: Assign Room to Student (Admin)
@@ -1610,7 +1610,7 @@ def assign_room(student_id):
     conn.close()
 
     flash("Room assigned successfully!", "success")
-    return redirect(url_for('admin_dashboard'))
+    return redirect(request.referrer or url_for('admin_dashboard'))
 
 # ============================================================
 # ROUTE: Temporary Database Cleanup Endpoint (Admin)
@@ -1714,7 +1714,7 @@ def delete_student(student_id):
     conn.close()
 
     flash("Student removed successfully!", "success")
-    return redirect(url_for('admin_dashboard'))
+    return redirect(request.referrer or url_for('admin_dashboard'))
 
 # ============================================================
 # ROUTE: Add Room (Admin)
@@ -1732,7 +1732,7 @@ def add_room():
 
     if not room_number:
         flash("Room number is required.", "error")
-        return redirect(url_for('admin_dashboard'))
+        return redirect(request.referrer or url_for('admin_dashboard'))
 
     conn = get_db()
     cursor = conn.cursor()
@@ -1747,7 +1747,7 @@ def add_room():
     cursor.close()
     conn.close()
 
-    return redirect(url_for('admin_dashboard'))
+    return redirect(request.referrer or url_for('admin_dashboard'))
 
 # ============================================================
 # API ROUTES (JSON) - For potential JS fetch usage
@@ -1794,7 +1794,7 @@ def edit_student_mobile():
     cursor.close(); conn.close()
     
     flash("Mobile numbers updated successfully!", "success")
-    return redirect(url_for('admin_dashboard'))
+    return redirect(request.referrer or url_for('admin_dashboard'))
 
 @app.route('/admin/fee/set-due-date', methods=['POST'])
 def set_due_date():
@@ -1811,7 +1811,7 @@ def set_due_date():
     cursor.close(); conn.close()
     
     flash("Fee due date updated!", "success")
-    return redirect(url_for('admin_dashboard'))
+    return redirect(request.referrer or url_for('admin_dashboard'))
 
 @app.route('/admin/sms/send-manual', methods=['POST'])
 def send_manual_sms():
@@ -1838,7 +1838,7 @@ def send_manual_sms():
         else:
             flash("Failed to send SMS. Check your API key or Fast2SMS balance.", "error")
             
-    return redirect(url_for('admin_dashboard'))
+    return redirect(request.referrer or url_for('admin_dashboard'))
 
 @app.route('/admin/sms/settings', methods=['GET', 'POST'])
 def save_sms_settings():
@@ -1846,7 +1846,7 @@ def save_sms_settings():
         return jsonify({'error': 'Unauthorized'}), 401
         
     if request.method == 'GET':
-        return redirect(url_for('admin_dashboard') + '#sms')
+        return redirect(request.referrer or url_for('admin_dashboard'))
         
     api_key = request.form.get('fast2sms_api_key', '').strip()
     target_student = 'true' if request.form.get('sms_target_student') else 'false'
@@ -1874,7 +1874,7 @@ def save_sms_settings():
     cursor.close(); conn.close()
     
     flash("SMS Settings saved successfully!", "success")
-    return redirect(url_for('admin_dashboard') + '#sms')
+    return redirect(request.referrer or url_for('admin_dashboard'))
 
 @app.route('/admin/sms/test', methods=['POST'])
 def test_sms():
@@ -1902,7 +1902,7 @@ def retry_sms(log_id):
     if not log:
         cursor.close(); conn.close()
         flash("Log not found.", "error")
-        return redirect(url_for('admin_dashboard') + '#sms')
+        return redirect(request.referrer or url_for('admin_dashboard'))
         
     success, err = send_fast2sms(log['mobile_number'], log['message'], student_id=log['student_id'])
     
@@ -1916,7 +1916,7 @@ def retry_sms(log_id):
     else:
         flash(f"Retry Failed: {err}", "error")
         
-    return redirect(url_for('admin_dashboard') + '#sms')
+    return redirect(request.referrer or url_for('admin_dashboard'))
 
 # ============================================================
 # NEW ADMIN CRUD ROUTES 
@@ -1931,7 +1931,7 @@ def edit_notice(id):
     cursor.execute("UPDATE notices SET title=%s, content=%s, priority=%s WHERE id=%s", (title, content, priority, id))
     conn.commit(); cursor.close(); conn.close()
     flash("Notice updated successfully.", "success")
-    return redirect(url_for('admin_dashboard') + '#notices')
+    return redirect(request.referrer or url_for('admin_dashboard'))
 
 @app.route('/notices/delete/<int:id>', methods=['POST'])
 def delete_notice(id):
@@ -1940,7 +1940,7 @@ def delete_notice(id):
     cursor.execute("DELETE FROM notices WHERE id=%s", (id,))
     conn.commit(); cursor.close(); conn.close()
     flash("Notice deleted successfully.", "success")
-    return redirect(url_for('admin_dashboard') + '#notices')
+    return redirect(request.referrer or url_for('admin_dashboard'))
 
 @app.route('/complaints/delete/<int:id>', methods=['POST'])
 def delete_complaint(id):
@@ -1949,7 +1949,7 @@ def delete_complaint(id):
     cursor.execute("DELETE FROM complaints WHERE id=%s", (id,))
     conn.commit(); cursor.close(); conn.close()
     flash("Complaint deleted successfully.", "success")
-    return redirect(url_for('admin_dashboard') + '#complaints')
+    return redirect(request.referrer or url_for('admin_dashboard'))
 
 @app.route('/students/edit-details/<int:id>', methods=['POST'])
 def edit_student_details(id):
@@ -1962,7 +1962,7 @@ def edit_student_details(id):
     cursor.execute("UPDATE students SET name=%s, email=%s, course=%s, year_of_study=%s WHERE id=%s", (name, email, course, year_of_study, id))
     conn.commit(); cursor.close(); conn.close()
     flash("Student details updated successfully.", "success")
-    return redirect(url_for('admin_dashboard') + '#students')
+    return redirect(request.referrer or url_for('admin_dashboard'))
 
 @app.route('/admin/student/<int:id>')
 def admin_student_profile(id):
@@ -1972,7 +1972,7 @@ def admin_student_profile(id):
     student = cursor.fetchone()
     if not student:
         cursor.close(); conn.close()
-        flash("Student not found", "error"); return redirect(url_for('admin_dashboard'))
+        flash("Student not found", "error"); return redirect(request.referrer or url_for('admin_dashboard'))
     
     cursor.execute("SELECT * FROM fees WHERE student_id=%s ORDER BY created_at DESC", (id,))
     fees = cursor.fetchall()
@@ -1998,7 +1998,7 @@ def edit_room(id):
                    (room_number, floor, capacity, room_type, monthly_fee, id))
     conn.commit(); cursor.close(); conn.close()
     flash("Room updated successfully.", "success")
-    return redirect(url_for('admin_dashboard') + '#rooms')
+    return redirect(request.referrer or url_for('admin_dashboard'))
 
 @app.route('/rooms/delete/<int:id>', methods=['POST'])
 def delete_room(id):
@@ -2009,12 +2009,12 @@ def delete_room(id):
     if room and room['current_occupancy'] > 0:
         cursor.close(); conn.close()
         flash("Cannot delete a room that still has occupants!", "error")
-        return redirect(url_for('admin_dashboard') + '#rooms')
+        return redirect(request.referrer or url_for('admin_dashboard'))
     
     cursor.execute("DELETE FROM rooms WHERE id=%s", (id,))
     conn.commit(); cursor.close(); conn.close()
     flash("Room deleted successfully.", "success")
-    return redirect(url_for('admin_dashboard') + '#rooms')
+    return redirect(request.referrer or url_for('admin_dashboard'))
 
 @app.route('/fees/edit-details/<int:id>', methods=['POST'])
 def edit_fee_details(id):
@@ -2025,7 +2025,7 @@ def edit_fee_details(id):
     cursor.execute("UPDATE fees SET amount=%s, due_date=%s WHERE id=%s", (amount, due_date, id))
     conn.commit(); cursor.close(); conn.close()
     flash("Fee details updated.", "success")
-    return redirect(url_for('admin_dashboard') + '#fees')
+    return redirect(request.referrer or url_for('admin_dashboard'))
 
 @app.route('/fees/delete/<int:id>', methods=['POST'])
 def delete_fee(id):
@@ -2034,7 +2034,7 @@ def delete_fee(id):
     cursor.execute("DELETE FROM fees WHERE id=%s", (id,))
     conn.commit(); cursor.close(); conn.close()
     flash("Fee record deleted.", "success")
-    return redirect(url_for('admin_dashboard') + '#fees')
+    return redirect(request.referrer or url_for('admin_dashboard'))
 
 # ============================================================
 # FINANCE TRACKER ROUTES
@@ -2108,7 +2108,7 @@ def add_finance_transaction():
     conn.commit(); cursor.close(); conn.close()
     
     flash("Transaction added successfully.", "success")
-    return redirect(url_for('admin_finance'))
+    return redirect(request.referrer or url_for('admin_finance'))
 
 @app.route('/admin/finance/edit/<int:id>', methods=['POST'])
 def edit_finance_transaction(id):
@@ -2129,7 +2129,7 @@ def edit_finance_transaction(id):
     conn.commit(); cursor.close(); conn.close()
     
     flash("Transaction updated.", "success")
-    return redirect(url_for('admin_finance') + f"?month={t_date[:7]}")
+    return redirect(request.referrer or url_for('admin_finance'))
 
 @app.route('/admin/finance/delete/<int:id>', methods=['POST'])
 def delete_finance_transaction(id):
@@ -2142,7 +2142,7 @@ def delete_finance_transaction(id):
     conn.commit(); cursor.close(); conn.close()
     
     flash("Transaction deleted.", "success")
-    return redirect(url_for('admin_finance') + (f"?month={month_filter}" if month_filter else ""))
+    return redirect(request.referrer or url_for('admin_finance'))
 
 # ============================================================
 # NEW FEATURE: FEE RECEIPTS APIS
