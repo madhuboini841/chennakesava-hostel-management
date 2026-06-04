@@ -5,7 +5,7 @@ def generate_qr():
     # We will just point it to a placeholder domain or relative path for now.
     # In production, they should print a QR code with the actual domain.
     # Let's point it to the generic path or a sample production URL
-    target_url = "https://chennakesava-hostel.onrender.com/student-registration"
+    target_url = "https://chennakesava-hostel-management.onrender.com/student-registration"
     
     img_dir = os.path.join(os.path.dirname(__file__), 'static', 'img')
     os.makedirs(img_dir, exist_ok=True)
