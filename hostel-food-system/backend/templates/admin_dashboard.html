@@ -338,10 +338,7 @@
                               <button
                                 onclick="openAssignRoom({{ s.id }}, '{{ s.name|escape }}', {{ s.room_id or 'null' }})">🛏️
                                 Assign Room</button>
-                              <form method="POST" action="/students/delete/{{ s.id }}" style="margin:0;"
-                                onsubmit="return confirm('Remove {{ s.name|escape }} from hostel?')">
-                                <button type="submit" class="danger">🗑️ Delete</button>
-                              </form>
+                              <button type="button" class="danger" onclick="confirmDeleteStudent({{ s.id }})">🗑️ Delete</button>
                             </div>
                           </div>
                         </td>
