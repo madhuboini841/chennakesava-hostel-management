@@ -93,25 +93,8 @@
           </div>
         </div>
 
-        {% if fee_alert %}
-        <div class="card" style="margin-bottom: 20px; border-left: 4px solid {% if fee_alert.type == 'overdue' or fee_alert.type == 'last_day' %}var(--danger){% elif fee_alert.type == 'due_2_days' or fee_alert.type == 'due_5_days' %}var(--warning){% else %}var(--success){% endif %}; background: {% if fee_alert.type == 'overdue' or fee_alert.type == 'last_day' %}#fee2e2{% elif fee_alert.type == 'due_2_days' or fee_alert.type == 'due_5_days' %}#fef3c7{% else %}#d1fae5{% endif %};">
-          <div class="card-body" style="padding: 15px 20px; display: flex; align-items: center; gap: 15px;">
-            <div style="font-size: 24px;">
-              {% if fee_alert.type == 'overdue' or fee_alert.type == 'last_day' %}⚠️
-              {% elif fee_alert.type == 'due_2_days' or fee_alert.type == 'due_5_days' %}🔔
-              {% else %}✅{% endif %}
-            </div>
-            <div>
-              <div style="font-weight: 700; font-size: 15px; color: {% if fee_alert.type == 'overdue' or fee_alert.type == 'last_day' %}#991b1b{% elif fee_alert.type == 'due_2_days' or fee_alert.type == 'due_5_days' %}#92400e{% else %}#065f46{% endif %};">
-                {{ fee_alert.message }}
-              </div>
-              {% if fee_alert.receipt_number %}
-              <div style="font-size: 13px; color: #065f46; margin-top: 4px;">Receipt No: {{ fee_alert.receipt_number }}</div>
-              {% endif %}
-            </div>
-          </div>
-        </div>
-        {% endif %}
+        <!-- Dynamic Home Banner injected by JS -->
+        <div id="homeFeeAlertBannerContainer"></div>
 
         <div class="two-col">
             <!-- Personal Info Card -->
@@ -634,6 +617,8 @@
       const today = new Date();
       today.setHours(0, 0, 0, 0);
 
+      let activeFeeAlert = null;
+
       document.querySelectorAll('#feeTableBody .fee-row').forEach(row => {
         const rawDateStr = row.getAttribute('data-due');
         const status = row.getAttribute('data-status');
@@ -664,6 +649,10 @@
         const diffTime = dueDate.getTime() - today.getTime();
         const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
 
+        if (!activeFeeAlert) {
+            activeFeeAlert = { diffDays: diffDays, rawDateStr: rawDateStr };
+        }
+
         if (diffDays < 0) {
           labelDiv.innerHTML = `<span class="badge badge-danger">Overdue by ${Math.abs(diffDays)} Days</span>`;
         } else if (diffDays === 0) {
@@ -674,6 +663,59 @@
           labelDiv.innerHTML = `<span class="badge badge-warning">Due in ${diffDays} Days</span>`;
         }
       });
+
+      // Render the Home Banner
+      const bannerContainer = document.getElementById('homeFeeAlertBannerContainer');
+      if (bannerContainer && activeFeeAlert) {
+          const diffDays = activeFeeAlert.diffDays;
+          const parts = activeFeeAlert.rawDateStr.split('-');
+          const fmtDate = `${parts[2]}-${parts[1]}-${parts[0]}`;
+          
+          let alertType = '';
+          let icon = '';
+          let colorHex = '';
+          let bgHex = '';
+          let message = '';
+          
+          if (diffDays < 0) {
+              alertType = 'danger';
+              icon = '⚠️';
+              colorHex = '#991b1b';
+              bgHex = '#fee2e2';
+              message = `Your fee is overdue by ${Math.abs(diffDays)} days.`;
+          } else if (diffDays === 0) {
+              alertType = 'warning';
+              icon = '🔔';
+              colorHex = '#92400e';
+              bgHex = '#fef3c7';
+              message = `Your fee is due today.`;
+          } else if (diffDays <= 5) {
+              alertType = 'warning';
+              icon = '🔔';
+              colorHex = '#92400e';
+              bgHex = '#fef3c7';
+              message = `Reminder: Your fee is due in ${diffDays} days.`;
+          } else {
+              alertType = 'success';
+              icon = '✅';
+              colorHex = '#065f46';
+              bgHex = '#d1fae5';
+              message = `Your next fee is due on ${fmtDate}.`;
+          }
+          
+          bannerContainer.innerHTML = `
+            <div class="card" style="margin-bottom: 20px; border-left: 4px solid var(--${alertType}); background: ${bgHex};">
+              <div class="card-body" style="padding: 15px 20px; display: flex; align-items: center; gap: 15px;">
+                <div style="font-size: 24px;">${icon}</div>
+                <div>
+                  <div style="font-weight: 700; font-size: 15px; color: ${colorHex};">
+                    ${message}
+                  </div>
+                </div>
+              </div>
+            </div>
+          `;
+      }
     }
 
     document.addEventListener("DOMContentLoaded", calculateStudentFeeAlerts);
