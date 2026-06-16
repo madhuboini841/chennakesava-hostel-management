@@ -3334,14 +3334,44 @@ def run_migrations():
         print(f"Migration info (already applied or error): {e}")
 
 # ============================================================
+# TEMPORARY DEBUG ENDPOINT (Remove before final release)
+# ============================================================
+@app.route('/debug-version')
+def debug_version():
+    import subprocess
+    import os
+    from datetime import date, datetime, timedelta
+    
+    try:
+        commit_hash = subprocess.check_output(['git', 'rev-parse', 'HEAD']).strip().decode('utf-8')
+    except Exception as e:
+        commit_hash = f"Unknown - Git Error: {str(e)}"
+        
+    try:
+        branch = subprocess.check_output(['git', 'rev-parse', '--abbrev-ref', 'HEAD']).strip().decode('utf-8')
+    except Exception as e:
+        branch = "Unknown"
+
+    today = date.today()
+    if today.day <= 10:
+        due = today.replace(day=10)
+    else:
+        due = today + timedelta(days=5)
+        
+    return jsonify({
+        "current_commit_hash": commit_hash,
+        "current_branch": branch,
+        "app_py_absolute_path": os.path.abspath(__file__),
+        "working_directory": os.getcwd(),
+        "system_date_today": str(today),
+        "calculated_due_date_for_today": str(due),
+        "server_utc_time": str(datetime.utcnow())
+    })
+
+# ============================================================
 # RUN THE APP
 # ============================================================
 if __name__ == '__main__':
     run_migrations()           # Run DB schema migrations
-    create_default_admin()     # Create admin on first run
-    app.run(host='0.0.0.0', debug=True, port=5000, use_reloader=False)
-
-if __name__ == '__main__':
-    run_migrations()
     create_default_admin()     # Create admin on first run
     app.run(host='0.0.0.0', debug=True, port=5000, use_reloader=False)
