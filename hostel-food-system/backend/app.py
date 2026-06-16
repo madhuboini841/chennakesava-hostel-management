@@ -803,7 +803,10 @@ course, year_of_study, room_id, dob, gender, aadhaar_number, blood_group, parent
             # Create initial fee record for current month
             today = date.today()
             month_name = today.strftime("%B %Y")
-            due = today.replace(day=10)  # Due on 10th of the month
+            if today.day <= 10:
+                due = today.replace(day=10)  # Due on 10th of the month
+            else:
+                due = today + timedelta(days=5)  # 5 days grace period for late joiners
             if room_id:
                 cursor.execute("SELECT monthly_fee FROM rooms WHERE id = %s", (room_id,))
                 room = cursor.fetchone()
@@ -3204,7 +3207,10 @@ def accept_request(student_id):
         # Create initial fee
         today = date.today()
         month_name = today.strftime("%B %Y")
-        due = today.replace(day=10)
+        if today.day <= 10:
+            due = today.replace(day=10)
+        else:
+            due = today + timedelta(days=5)
         fee_amount = room['monthly_fee']
 
         cursor.execute(
