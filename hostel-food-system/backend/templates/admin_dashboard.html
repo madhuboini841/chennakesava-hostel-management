@@ -705,6 +705,7 @@
                 <tbody id="feeTableBody">
                   {% for f in fees %}
                   <tr class="fee-row" data-fee-id="{{ f.id }}" data-status="{{ f.status }}" data-due="{{ f.due_date }}"
+                    data-payment-date="{{ f.payment_date or '' }}"
                     data-student="{{ f.student_id }}" data-name="{{ f.student_name|escape }}"
                     data-amount="{{ f.amount }}">
                     <td>{{ loop.index }}</td>
@@ -2473,6 +2474,7 @@
       document.querySelectorAll('#feeTableBody .fee-row').forEach(row => {
         const rawDateStr = row.getAttribute('data-due');
         const status = row.getAttribute('data-status');
+        const paymentDateStr = row.getAttribute('data-payment-date');
         const labelDiv = row.querySelector('.fee-dynamic-label');
         if (!labelDiv) return;
 
@@ -2482,11 +2484,18 @@
 
         if (status === 'paid') {
           row.classList.add('fee-paid');
+          if (paymentDateStr && paymentDateStr !== 'None') {
+              const parts = paymentDateStr.split('-');
+              if(parts.length === 3) {
+                  const fmtDate = `${parts[2]}-${parts[1]}-${parts[0]}`;
+                  labelDiv.innerHTML = `<span class="fee-label-badge" style="background:#10b981;color:white;">Paid on ${fmtDate}</span>`;
+              }
+          }
           return; // skip counts for paid
         }
 
         pendingCount++;
-        if (!rawDateStr) return; // No date set
+        if (!rawDateStr || rawDateStr === 'None') return; // No date set
 
         const parts = rawDateStr.split('-');
         if (parts.length !== 3) return;
@@ -2508,12 +2517,10 @@
           dueSoonCount++;
           row.classList.add('fee-due-soon');
           labelDiv.innerHTML = `<span class="fee-label-badge due-soon">Due Tomorrow</span>`;
-        } else if (diffDays <= 7) {
+        } else {
           dueSoonCount++;
           row.classList.add('fee-due-soon');
-          labelDiv.innerHTML = `<span class="fee-label-badge due-soon">Due in ${diffDays} Days</span>`;
-        } else {
-          labelDiv.innerHTML = `<span class="fee-label-badge pending">Pending</span>`;
+          labelDiv.innerHTML = `<span class="fee-label-badge pending">Due in ${diffDays} Days</span>`;
         }
       });
 

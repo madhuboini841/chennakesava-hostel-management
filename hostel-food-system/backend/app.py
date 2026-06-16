@@ -14,6 +14,22 @@ from datetime import date, datetime, timedelta
 import os
 import requests
 import subprocess
+import calendar
+
+def add_one_month(orig_date):
+    print("ENTERED add_one_month()")
+    month = orig_date.month
+    year = orig_date.year
+    day = orig_date.day
+    if month == 12:
+        new_month = 1
+        new_year = year + 1
+    else:
+        new_month = month + 1
+        new_year = year
+    last_day_of_new_month = calendar.monthrange(new_year, new_month)[1]
+    new_day = min(day, last_day_of_new_month)
+    return orig_date.replace(year=new_year, month=new_month, day=new_day)
 from apscheduler.schedulers.background import BackgroundScheduler
 from flask_cors import CORS
 
@@ -705,6 +721,7 @@ def logout():
 # ============================================================
 @app.route('/register', methods=['GET', 'POST'])
 def register():
+    print("ENTERED register()")
     if not is_admin():
         flash("Admin access required.", "error")
         return redirect(url_for('login'))
@@ -800,13 +817,11 @@ course, year_of_study, room_id, dob, gender, aadhaar_number, blood_group, parent
                     (room_id,)
                 )
 
-            # Create initial fee record for current month
+            # Create initial fee record for current month based on join date
+            print("ENTERED fee creation logic (register)")
             today = date.today()
             month_name = today.strftime("%B %Y")
-            if today.day <= 10:
-                due = today.replace(day=10)  # Due on 10th of the month
-            else:
-                due = today + timedelta(days=5)  # 5 days grace period for late joiners
+            due = today  # Initial due date is exactly the join date
             if room_id:
                 cursor.execute("SELECT monthly_fee FROM rooms WHERE id = %s", (room_id,))
                 room = cursor.fetchone()
@@ -1529,6 +1544,7 @@ def update_complaint(complaint_id):
 # ============================================================
 @app.route('/fees/update/<int:fee_id>', methods=['POST'])
 def update_fee(fee_id):
+    print("ENTERED update_fee()")
     if not is_admin():
         return jsonify({'error': 'Unauthorized'}), 401
 
@@ -1536,11 +1552,37 @@ def update_fee(fee_id):
     payment_date = date.today() if status == 'paid' else None
 
     conn = get_db()
-    cursor = conn.cursor()
+    cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    
+    # 1. Update current fee status
     cursor.execute(
-        "UPDATE fees SET status = %s, payment_date = %s WHERE id = %s",
+        "UPDATE fees SET status = %s, payment_date = %s WHERE id = %s RETURNING student_id, due_date",
         (status, payment_date, fee_id)
     )
+    updated_fee = cursor.fetchone()
+    
+    # 2. If marked as paid, generate next month fee automatically
+    if status == 'paid' and updated_fee:
+        student_id = updated_fee['student_id']
+        current_due_date = updated_fee['due_date']
+        
+        # Prevent duplicates: Check if pending fee exists
+        cursor.execute("SELECT id FROM fees WHERE student_id = %s AND status = 'pending'", (student_id,))
+        if not cursor.fetchone():
+            # Get fee_amount from room
+            cursor.execute("SELECT r.monthly_fee FROM rooms r JOIN students s ON s.room_id = r.id WHERE s.id = %s", (student_id,))
+            room = cursor.fetchone()
+            fee_amount = room['monthly_fee'] if room else 5000.00
+            
+            next_due_date = add_one_month(current_due_date)
+            month_name = next_due_date.strftime("%B %Y")
+            
+            cursor.execute(
+                "INSERT INTO fees (student_id, amount, month, year, due_date) VALUES (%s, %s, %s, %s, %s)",
+                (student_id, fee_amount, month_name, next_due_date.year, next_due_date)
+            )
+
+    conn.commit()
     cursor.close()
     conn.close()
 
@@ -2965,6 +3007,7 @@ def initiate_payment(fee_id):
 
 @app.route('/student/fee/verify', methods=['POST'])
 def verify_payment():
+    print("ENTERED verify_payment()")
     if not is_student():
         return jsonify({'error': 'Unauthorized'}), 401
         
@@ -3005,9 +3048,30 @@ def verify_payment():
             WHERE razorpay_order_id = %s
         """, (razorpay_payment_id, razorpay_signature, razorpay_order_id))
             
-        # Update fees
+        # Update fees and return values
         today = date.today().isoformat()
-        cursor.execute("UPDATE fees SET status = 'paid', payment_date = %s WHERE id = %s", (today, fee_id))
+        cursor.execute("UPDATE fees SET status = 'paid', payment_date = %s WHERE id = %s RETURNING student_id, due_date", (today, fee_id))
+        updated_fee = cursor.fetchone()
+        
+        if updated_fee:
+            student_id = updated_fee['student_id']
+            current_due_date = updated_fee['due_date']
+            
+            # Prevent duplicates: Check if pending fee exists
+            cursor.execute("SELECT id FROM fees WHERE student_id = %s AND status = 'pending'", (student_id,))
+            if not cursor.fetchone():
+                # Get fee_amount from room
+                cursor.execute("SELECT r.monthly_fee FROM rooms r JOIN students s ON s.room_id = r.id WHERE s.id = %s", (student_id,))
+                room_info = cursor.fetchone()
+                fee_amount = room_info['monthly_fee'] if room_info else 5000.00
+                
+                next_due_date = add_one_month(current_due_date)
+                month_name = next_due_date.strftime("%B %Y")
+                
+                cursor.execute(
+                    "INSERT INTO fees (student_id, amount, month, year, due_date) VALUES (%s, %s, %s, %s, %s)",
+                    (student_id, fee_amount, month_name, next_due_date.year, next_due_date)
+                )
         
         # Get fee details for transaction and receipt
         cursor.execute("""
@@ -3169,6 +3233,7 @@ course, year_of_study, dob, parent_name, college_name, permanent_address, city, 
 # ============================================================
 @app.route('/admin/request/accept/<int:student_id>', methods=['POST'])
 def accept_request(student_id):
+    print("ENTERED accept_request()")
     if not is_admin():
         return jsonify({'error': 'Unauthorized'}), 401
     
@@ -3205,12 +3270,10 @@ def accept_request(student_id):
         cursor.execute("UPDATE rooms SET status = CASE WHEN current_occupancy >= capacity THEN 'full' ELSE 'available' END WHERE id = %s", (room_id,))
 
         # Create initial fee
+        print("ENTERED fee creation logic (accept_request)")
         today = date.today()
         month_name = today.strftime("%B %Y")
-        if today.day <= 10:
-            due = today.replace(day=10)
-        else:
-            due = today + timedelta(days=5)
+        due = today  # Initial due date is exactly the join date
         fee_amount = room['monthly_fee']
 
         cursor.execute(

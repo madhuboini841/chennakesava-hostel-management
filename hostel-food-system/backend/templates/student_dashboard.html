@@ -267,12 +267,15 @@
                       <th style="text-align:center;">Action</th>
                     </tr>
                   </thead>
-                  <tbody>
+                  <tbody id="feeTableBody">
                     {% for fee in fees %}
-                    <tr>
+                    <tr class="fee-row" data-fee-id="{{ fee.id }}" data-status="{{ fee.status }}" data-due="{{ fee.due_date }}" data-payment-date="{{ fee.payment_date or '' }}">
                       <td><strong>{{ fee.month }}</strong></td>
                       <td>₹{{ "%.0f"|format(fee.amount) }}</td>
-                      <td>{{ fee.due_date }}</td>
+                      <td>
+                        <div class="fee-due-date-raw">{{ fee.due_date }}</div>
+                        <div class="fee-dynamic-label"></div>
+                      </td>
                       <td>
                         {% if fee.status == 'paid' %}
                           <span class="badge badge-success">✅ Paid</span>
@@ -627,6 +630,54 @@
   </div><!-- /dashboard-layout -->
 
   <script>
+    function calculateStudentFeeAlerts() {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+
+      document.querySelectorAll('#feeTableBody .fee-row').forEach(row => {
+        const rawDateStr = row.getAttribute('data-due');
+        const status = row.getAttribute('data-status');
+        const paymentDateStr = row.getAttribute('data-payment-date');
+        const labelDiv = row.querySelector('.fee-dynamic-label');
+        if (!labelDiv) return;
+
+        labelDiv.innerHTML = '';
+
+        if (status === 'paid') {
+          if (paymentDateStr && paymentDateStr !== 'None') {
+              const parts = paymentDateStr.split('-');
+              if(parts.length === 3) {
+                  const fmtDate = `${parts[2]}-${parts[1]}-${parts[0]}`;
+                  labelDiv.innerHTML = `<span class="badge badge-success" style="background:#10b981;color:white;">Paid on ${fmtDate}</span>`;
+              }
+          }
+          return;
+        }
+
+        if (!rawDateStr || rawDateStr === 'None') return;
+
+        const parts = rawDateStr.split('-');
+        if (parts.length !== 3) return;
+        const dueDate = new Date(parts[0], parts[1] - 1, parts[2]);
+        dueDate.setHours(0, 0, 0, 0);
+
+        const diffTime = dueDate.getTime() - today.getTime();
+        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+        if (diffDays < 0) {
+          labelDiv.innerHTML = `<span class="badge badge-danger">Overdue by ${Math.abs(diffDays)} Days</span>`;
+        } else if (diffDays === 0) {
+          labelDiv.innerHTML = `<span class="badge badge-warning">Due Today</span>`;
+        } else if (diffDays === 1) {
+          labelDiv.innerHTML = `<span class="badge badge-warning">Due Tomorrow</span>`;
+        } else {
+          labelDiv.innerHTML = `<span class="badge badge-warning">Due in ${diffDays} Days</span>`;
+        }
+      });
+    }
+
+    document.addEventListener("DOMContentLoaded", calculateStudentFeeAlerts);
+
     const tabTitles = {
       'profile': 'My Profile',
       'fees': 'Fee Status',
